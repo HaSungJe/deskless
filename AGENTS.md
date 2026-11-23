@@ -8,7 +8,8 @@ deskless — 무인 객실 대여 서비스의 백엔드 · 프론트를 쿠버�
 deskless/
 ├── backend/     # submodule → HaSungJe/deskless-backend (main) — 받기 전용
 ├── frontend/    # submodule → HaSungJe/deskless-frontend (main) — 받기 전용
-├── README.md    # 받기 · 하위 저장소 갱신 · 쿠버네티스 방향
+├── requests/    # 하위 저장소에 보내는 요청서 — backend/ · frontend/ · README.md(목록 · 상태 · 반영 순서)
+├── README.md    # 받기 · 하위 저장소 갱신 · 요청서 · 쿠버네티스 방향
 └── AGENTS.md
 ```
 
@@ -16,6 +17,7 @@ deskless/
 
 - **응답은 한국어로만** — 사용자에게 보이는 모든 글(진행 안내 · 보고 · 질문 · 설명 · 표 · 검색 요약)은 한국어로 쓴다. 코드 · 명령 · 파일명 · 라이브러리 이름 · URL 같은 고유명사만 영어 그대로 둔다.
 - **하위 저장소는 받기 전용** — `backend/` · `frontend/` 안의 파일을 수정 · 커밋하지 않는다. 개발은 각 저장소의 작업 폴더에서 하고, 여기서는 `git submodule update --remote` 로 최신을 받아 그 조합(submodule 커밋)만 커밋한다. 앱 코드를 바꿔야 하면 그 저장소에서 작업한다.
+- **하위 저장소를 고쳐야 하면 요청서를 쓴다** — `requests/<backend|frontend>/<YYYY-MM-DD>-<기능>.md`(왜 · 정해진 것 · 지우는 것 / 더하는 것 / 고치는 것 / 그대로 두는 것 — 근거 `경로:줄`, 기준 커밋 · 끝난 상태 체크리스트) + `requests/README.md` 목록에 한 줄(상태 · 반영 순서). 반영은 그 저장소의 세션이 하고, 상태는 여기서 고친다(사용자 결정 2026-11-23).
 - **클러스터 · 배포는 사용자가 직접 실행** — 클러스터 만들기 · 지우기(`k3d cluster create` · k3s 설치), `helm install` · `helm upgrade` · `helm uninstall`, `kubectl apply` · `kubectl delete`, `tilt up` 을 Claude 가 실행하지 않는다. 검증용 `helm lint` · `helm template`(클러스터에 닿지 않음)과 `docker build` 는 해도 된다.
 - **DB 마이그레이션 적용은 사용자 몫** — 마이그레이션 Job 을 Claude 가 실행하지 않는다(백엔드 규칙과 같다).
 - **`.env` 는 커밋하지 않고, Claude 는 내용을 읽거나 보고하지 않는다** — 예시는 `.env.example` 에만 둔다.
@@ -41,4 +43,6 @@ deskless/
 - 인프라(PostgreSQL · RabbitMQ · Redis)는 앱과 따로 설치하는 묶음 — 관리형 서비스를 쓰는 운영에서는 설치하지 않는다(백엔드의 `docker:infra` 를 돌리느냐와 같은 구조).
 - 백엔드 Docker 구성과의 대응: 앱 4개 → Deployment, `*-lb`(nginx) → Service, `gateway-lb` → Ingress(`/ws/` WebSocket 포함), `migrate` → Job, 공용 네트워크(internal) → NetworkPolicy, `.env` → Secret · ConfigMap.
 - 이미지: 각 저장소의 `Dockerfile` 그대로(백엔드는 `APP` 인자로 4개). 로컬은 Tilt 가 PC 빌드 이미지를 넘기고, 운영은 레지스트리 태그(하위 저장소 커밋 해시).
-- 먼저 풀어야 할 것: 앱 헬스 체크 엔드포인트(백엔드 저장소 작업 — readiness · liveness), 공용 파일 볼륨 `deskless-files` 는 노드 1대에서만 그대로 쓰고 여러 대면 S3 모드.
+- 배포 구성은 모두 여기 — 백엔드 · 프론트의 compose · nginx · 인스턴스 수 · 공용 네트워크는 지우고(요청서 2026-11-23), 모니터링(Prometheus · Grafana · 수집기 · 기록 규칙 · 대시보드)도 여기로 옮긴다. 앱 지표 코드(`/metrics`)와 헬스 체크(`/health/live` · `/health/ready` — 지표 전용 포트, 준비 판단은 앱 상태만)는 앱에 남는다.
+- 로컬 개발 인프라도 여기 — 백엔드에 compose 가 없으므로 `npm run start:*` 로 개발할 때 PostgreSQL · RabbitMQ · Redis 는 로컬 클러스터에서 띄우고 PC 에서 닿게 연다.
+- 남은 과제: 공용 파일 볼륨 `deskless-files` 는 노드 1대에서만 그대로 쓰고 여러 대면 S3 모드.
