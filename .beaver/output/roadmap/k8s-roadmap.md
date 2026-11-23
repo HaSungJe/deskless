@@ -9,7 +9,7 @@
 ```mermaid
 flowchart LR
   P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::done
-  P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::inprog
+  P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::done
   P3 --> P4["Phase 4 · 프론트 (2)"]:::todo
   P3 --> P5["Phase 5 · 모니터링 (3)"]:::todo
   P4 -. 동시 가능 .- P5
@@ -25,7 +25,7 @@ flowchart LR
 
 - Phase 1 — 배포 구성 분리 · 유닛 3개 · 의존: — · 푼다: Phase 2 · 파일 집합: requests/, AGENTS.md, docs/ (+ backend · frontend 저장소) · done
 - Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
-- Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · in-progress
+- Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · todo
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · todo
 - Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · todo
@@ -34,13 +34,14 @@ flowchart LR
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: Phase 3 진행 중 · Next up: Phase 3
+지금: 진행 중 없음 · Next up: Phase 4
 
 ## 지금 할 일
-Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 자동으로 늘고 줄게
-- 원클릭 — .\deskless up(또는 deskless.cmd 더블클릭): 값 파일 · 필수 값 · 도구를 먼저 모두 확인 → 클러스터 → 인프라 → 백엔드
-- 만들어진 것 확인 — Swagger http://localhost:13000/swagger · .\deskless status 로 대수 · 사용률
-- 만족하면 "ok" — 커밋 · 푸시하고 Phase 4 · 5 로
+Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(localhost:15000) 옛 모니터링을 옮기기(동시 가능)
+- 정할 것 — 프론트 빌드 값 파일(백엔드처럼 frontend/ 사본에 두는 클러스터용 .env) · 모니터링 방식(직접 차트 vs kube-prometheus-stack)
+- 원클릭에 더하기 — .\deskless up 이 프론트 값 파일까지 먼저 확인하고 웹 · 모니터링까지 올린다
+- 확인 — http://localhost:15000 화면 · 대시보드에서 앱 부하율
+- ok → 커밋 · 푸시하고 Phase 6 네트워크 격리로
 
 ## Scope & Actors
 
@@ -91,13 +92,13 @@ Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 �
 ### Phase 3 — 백엔드 앱 · 자동 증설 (backend 4개를 클러스터에 올리고 대수가 자동으로 늘고 줄게) · depends: Phase 2
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 10 | 로컬 이미지 공급 | backend `Dockerfile` 로 `APP` 4개를 빌드해 로컬 클러스터에 넣기 | Tilt 로 갈지, 스크립트 빌드 + `k3d image import` 로 갈지 | — | in-progress |
-| 11 | 앱 설정 주입 | backend `.env` 키를 Secret · ConfigMap 으로 — 앱이 쓰지 않는 비밀값은 주지 않는다 | 앱별 키 나누기 | — | in-progress |
-| 12 | 앱 4개 Deployment · Service | 컨테이너 포트 · 바인딩 0.0.0.0 · 서비스 주소 · 인스턴스 ID · 지표 포트 9464 · 프로브 `/health/*` · 종료 유예 | — | 10, 11 | in-progress |
-| 13 | 마이그레이션 Job | user-service 마이그레이션 · 시드 — 적용은 사용자 | 설치 때마다 돌지, 명령으로만 돌지 | 12 | in-progress |
-| 14 | 공용 파일 볼륨 | gateway · user-service · admin-service 가 같은 `/app/storage/files`(노드 1대) | — | 12 | in-progress |
-| 15 | Ingress (gateway) | 공개 주소 · `/ws/` 업그레이드 · 업로드 10MB · SSE 버퍼링 끔 · 읽기 대기 120초 · `TRUST_PROXY` | 접속 주소 모양(아래 Open Decisions) | 12 | in-progress |
-| 16 | 자동 증설 | 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(기본 gateway · user-service 2 ~ 4, 나머지 1 ~ 1) — 다르면 HPA(CPU 70%), 같으면 고정 | CPU 요청값(70% 의 기준 — 코어 1개) | 12 | in-progress |
+| 10 | 로컬 이미지 공급 | backend `Dockerfile` 로 `APP` 4개를 빌드해 로컬 클러스터에 넣기 | Tilt 로 갈지, 스크립트 빌드 + `k3d image import` 로 갈지 | — | done(173c26f) |
+| 11 | 앱 설정 주입 | backend `.env` 키를 Secret · ConfigMap 으로 — 앱이 쓰지 않는 비밀값은 주지 않는다 | 앱별 키 나누기 | — | done(173c26f) |
+| 12 | 앱 4개 Deployment · Service | 컨테이너 포트 · 바인딩 0.0.0.0 · 서비스 주소 · 인스턴스 ID · 지표 포트 9464 · 프로브 `/health/*` · 종료 유예 | — | 10, 11 | done(173c26f) |
+| 13 | 마이그레이션 Job | user-service 마이그레이션 · 시드 — 적용은 사용자 | 설치 때마다 돌지, 명령으로만 돌지 | 12 | done(173c26f) |
+| 14 | 공용 파일 볼륨 | gateway · user-service · admin-service 가 같은 `/app/storage/files`(노드 1대) | — | 12 | done(173c26f) |
+| 15 | Ingress (gateway) | 공개 주소 · `/ws/` 업그레이드 · 업로드 10MB · SSE 버퍼링 끔 · 읽기 대기 120초 · `TRUST_PROXY` | 접속 주소 모양(아래 Open Decisions) | 12 | done(173c26f) |
+| 16 | 자동 증설 | 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(기본 gateway · user-service 2 ~ 4, 나머지 1 ~ 1) — 다르면 HPA(CPU 70%), 같으면 고정 | CPU 요청값(70% 의 기준 — 코어 1개) | 12 | done(173c26f) |
 
 **Expected commands**:
 
@@ -167,8 +168,8 @@ Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 �
 |------|---------|---------|
 | #24 | `./deskless.sh <묶음> up` (운영 `.env`) | 같은 명령으로 운영 설치 |
 
-**Progress**: 9/25 units done (2/8 phases)
-**Next up**: Phase 3 백엔드 앱 — 의존(Phase 2) 모두 완료
+**Progress**: 16/25 units done (3/8 phases)
+**Next up**: Phase 4 프론트 — 의존(Phase 3) 모두 완료
 
 ## Cross-Cutting Rules
 
