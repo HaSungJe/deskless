@@ -94,10 +94,15 @@ git pull --recurse-submodules
 ./deskless-server.sh restart web       # 같은 태그를 다시 올렸을 때 — 다시 받아 한 대씩 재시작
 ```
 
-웹 이미지는 프론트가 [공개 값 실행 때 읽기](requests/frontend/2026-11-24-runtime-public-env.md)를 반영하기 전까지 올린 쪽의 공개 주소가 박힙니다 — 그때까지 운영용 웹은 서버에서 올립니다(`./deskless-server.sh push web`).
+웹 이미지도 공개 주소 · 키를 실행 때 읽어 어디서 올려도 같습니다 — 주소를 바꿀 때는 `.env` 만 고치고 `up web` 하면 됩니다(다시 빌드하지 않는다).
 
 ## 더 보기
 
-- 하위 저장소 최신 받기 — `git submodule update --remote` → `git add backend frontend` → 커밋. `backend/` · `frontend/` 안에서는 고치지 않고, 고칠 것은 [requests/](requests/README.md) 요청서로 보냅니다.
+- 하위 저장소(backend · frontend)는 받기만 합니다 — 안에서 고치지 않고, 고칠 것은 [requests/](requests/README.md) 요청서로 보냅니다. 각 저장소가 푸시하면 최신을 받아 deskless 에 커밋합니다:
+
+  ```powershell
+  git submodule update --remote               # backend · frontend 최신 받기(하나만: git submodule update --remote frontend)
+  git add backend frontend                    # 받은 커밋을 deskless 에 기록 → 커밋 · 푸시
+  ```
 - 운영 서버 · 이미지(GHCR) · 백업 · 비밀번호 바꾸기 · 값 흐름 · 자동 증설 · 네트워크 격리 · 모니터링 · 대시보드 — [docs/kubernetes.md](docs/kubernetes.md)
 - 저장소 규칙 — [AGENTS.md](AGENTS.md) · 진행 순서 — [로드맵](.beaver/output/roadmap/k8s-roadmap.md)

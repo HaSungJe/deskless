@@ -39,7 +39,7 @@ flowchart LR
 모든 Phase 완료 — 클러스터에서 직접 확인
 - 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 .\deskless reset(로컬 클러스터를 지우고 다시 만들어 전부 올린다) → http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드 로그인
 - GHCR — .env.example 의 이미지 절을 .env 에 옮겨 GHCR_USER · GHCR_PUSH_TOKEN 을 넣고 .\deskless push gateway
-- 프론트 요청서 2건(API_INTERNAL_URL · 공개 값 실행 때 읽기)을 프론트 세션에 보낸다 — 반영되면 git submodule update --remote
+- 웹 로그인 · 가입 — 클러스터 웹(http://localhost:<LOCAL_WEB_PORT>)에서 로그인이 되는지(API_INTERNAL_URL 반영 — frontend 6239666)
 - 새로 할 일이 생기면 "로드맵에 추가"
 
 ## Scope & Actors
@@ -197,7 +197,7 @@ flowchart LR
 ## Notes / Risks
 
 - 운영 `.env` 점검(기본 비밀번호 · 테스트 데이터 · `localhost` 주소가 남으면 멈춤) · HTTPS(인증서)는 하지 않기로 했다(사용자 2026-11-24 — 권장 중단). 필요해지면 새 Phase 로.
-- 웹 이미지는 프론트가 공개 값을 실행 때 읽기(요청서 `requests/frontend/2026-11-24-runtime-public-env.md`) 전까지 올린 쪽의 공개 주소가 박힌다 — 그때까지 운영용 웹은 서버에서 `push`.
+- 프론트 요청서 3건(API_INTERNAL_URL · 공개 값 실행 때 읽기 · `.env.example` 정리) 반영 — frontend `33c722a` · `6239666`(2026-11-24). 웹 이미지 하나를 로컬 · 운영이 같이 쓴다.
 
 - `helm` v4.3.2 · `k3d` v5.9.0(k3s 1.35) 설치됨(2026-11-23) — 실제 클러스터 설치 확인(Phase 2 인프라)은 사용자가 아직.
 - 로컬 Docker Desktop(WSL2 커널 5.15)은 cgroup v1 — k3s 1.35 kubelet 이 거부해 클러스터 만들기에 `--kubelet-arg=fail-cgroupv1=false` 를 붙였다(2026-11-23). WSL 이 cgroup v2 가 되면 뺀다.

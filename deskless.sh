@@ -496,10 +496,15 @@ web_build_env() {
     printf '\n# deskless 공개 주소(.env)\nNEXT_PUBLIC_API_URL=%s\nNEXT_PUBLIC_SERVER_URL=%s\nNEXTAUTH_URL=%s\n' "$gw_url" "$web_url" "$web_url" >> "$out"
 }
 
-# 프론트 이미지 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다). 빌드 값 해시를 빌드 인자로 — 프론트 Dockerfile 이 ARG 로 받으면 값이 바뀔 때 빌드 캐시를 쓰지 않는다
+# 빌드에 박히는 프론트 값의 해시 — basePath(NEXT_PUBLIC_LOCAL_SERVER_PREFIX) · 이미지 호스트(NEXT_IMAGE_*)만. 공개 값은 실행 때 읽어(frontend 33c722a) 바뀌어도 다시 빌드하지 않는다
+web_build_hash() {
+    { grep -E '^[[:space:]]*(NEXT_PUBLIC_LOCAL_SERVER_PREFIX|NEXT_IMAGE_[A-Za-z0-9_]*)[[:space:]]*=' "$1" || true; } | tr -d '\r' | LC_ALL=C sort | sha256sum | cut -c1-16
+}
+
+# 프론트 이미지 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다). 빌드 값 해시를 빌드 인자로 — 프론트 Dockerfile 의 ARG 가 받아, 값이 바뀌면 빌드 캐시를 쓰지 않는다
 build_web_image() {
     local name="$1" build_env="$2" src="$2" hash
-    hash="$(sha256sum "$build_env" | cut -c1-16)"
+    hash="$(web_build_hash "$build_env")"
     command -v cygpath > /dev/null 2>&1 && src="$(cygpath -w "$build_env")"
     build_image "$name" "$ROOT/frontend" --secret "id=dotenv,src=$src" --build-arg "DESKLESS_BUILD_ENV_HASH=$hash"
 }
@@ -868,9 +873,9 @@ web_up() {
         # 태그 = frontend/ 커밋 — 올린 쪽(push)과 같은 태그
         tag="$(source_tag web)"
     else
-        # 빌드 값 — 공개 주소는 .env. 태그 = frontend/ 커밋 + 빌드 값 해시 — 빌드 값이 바뀌면 다시 빌드한다
+        # 빌드 값 — 공개 주소는 .env. 태그 = frontend/ 커밋 + 빌드에 박히는 값(basePath · 이미지 호스트)의 해시 — 그 값이 바뀔 때만 다시 빌드한다
         web_build_env "$build_env" "$gw_url" "$web_url"
-        tag="$(source_tag web)-$(sha256sum "$build_env" | cut -c1-8)"
+        tag="$(source_tag web)-$(web_build_hash "$build_env" | cut -c1-8)"
     fi
     # Secret — 서버만 쓰는 비밀값
     {
@@ -959,7 +964,7 @@ push_images() {
     prefix="$(image_prefix registry)"
     host="$(registry_host)"
     if in_list web "${SELECTED[@]}"; then
-        # 프론트 빌드 값 — 공개 주소는 .env(프론트가 실행 때 읽게 되기 전까지는 올린 쪽의 주소가 이미지에 박힌다)
+        # 프론트 빌드 값 — 공개 값은 실행 때 읽으므로(ConfigMap) 어디서 올려도 같은 이미지다. 빌드에 박히는 값은 basePath · 이미지 호스트뿐
         load_frontend_env
         gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
         web_url="$(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT)"
@@ -1266,11 +1271,11 @@ preflight() {
         [ -z "$missing" ] || problems+=(".env 에 없는 키(.env.example 에 새로 생김): $missing — .env.example 에서 옮겨 적는다")
     fi
     if [ -n "$BENV_LOADED" ]; then
-        missing="$(missing_example_keys "$ROOT/backend/.env.example" BENV)"
+        missing="$(missing_example_keys "$ROOT/backend/.env.example" BENV "${BACKEND_CLUSTER_KEYS[@]}")"
         [ -z "$missing" ] || problems+=("backend/.env 에 없는 키(backend/.env.example 에 새로 생김): $missing — 옮겨 적는다")
     fi
     if [ -n "$FENV_FILE" ]; then
-        missing="$(missing_example_keys "$ROOT/frontend/.env.example" FENV)"
+        missing="$(missing_example_keys "$ROOT/frontend/.env.example" FENV "${WEB_CLUSTER_KEYS[@]}")"
         [ -z "$missing" ] || problems+=("${FENV_FILE#"$ROOT"/} 에 없는 키(frontend/.env.example 에 새로 생김): $missing — 옮겨 적는다")
     fi
     # 이 PC 값(로컬 k3d) — 포트는 1 ~ 65535, 서로 겹치지 않게, 기다리는 시간은 정수
