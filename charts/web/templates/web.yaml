@@ -19,6 +19,12 @@ spec:
   replicas: {{ $w.replicasMin }}
   {{- end }}
   {{- /* 최소 < 최대면 replicas 를 두지 않는다 — 대수는 HPA(hpa.yaml)가 정한다 */}}
+  # 새 이미지로 바꿀 때 한 대씩 — 새 파드가 준비되면 옛 파드를 하나 내린다
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "web.selector" . | nindent 6 }}
@@ -29,12 +35,16 @@ spec:
       annotations:
         deskless/config-hash: {{ .Values.configHash | quote }}
     spec:
+      {{- with .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ . }}
+      {{- end }}
       # 종료 신호 → preStop 대기(Service 에서 빠질 시간) → 앱 종료
       terminationGracePeriodSeconds: 30
       containers:
         - name: web
-          image: {{ printf "%s/web:%s" .Values.imageRepo .Values.imageTag }}
-          imagePullPolicy: IfNotPresent
+          image: {{ printf "%sweb:%s" .Values.imagePrefix .Values.imageTag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
           # 비밀이 아닌 실행 값 — 프론트 값 파일의 [실행] 키(./deskless.sh 가 ConfigMap 으로)
           envFrom:
             - configMapRef:

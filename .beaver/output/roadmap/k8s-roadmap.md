@@ -15,9 +15,8 @@ flowchart LR
   P4 -. 동시 가능 .- P5
   P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::done
   P5 --> P6
-  P5 --> P7["Phase 7 · 부하율 기준 자동 증설 (1)"]:::todo
-  P6 -. 동시 가능 .- P7
-  P6 --> P8["Phase 8 · 운영 준비 (2)"]:::todo
+  P6 --> P7["Phase 7 · 운영 실행 파일 · GHCR (2)"]:::inprog
+  P6 --> P8["Phase 8 · 쿠버네티스 대시보드 (1)"]:::inprog
   classDef done stroke:#3fa46f,stroke-width:2px
   classDef inprog stroke:#e0a82e,stroke-width:3px
   classDef todo stroke:#8a949c,stroke-width:1px,stroke-dasharray:4 3
@@ -27,20 +26,21 @@ flowchart LR
 - Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · done
-- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · done
-- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · done
-- Phase 7 — 부하율 기준 자동 증설 · 유닛 1개 · 의존: Phase 5 · 푼다: — · 파일 집합: charts/monitoring/, charts/backend/ (HPA 기준) · todo
-- Phase 8 — 운영 준비 · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless.sh, README.md, .env.example · todo
+- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/monitoring/ · done
+- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 7 · 파일 집합: charts/*/templates/networkpolicy.yaml · done
+- Phase 7 — 운영 실행 파일 · GHCR · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless-server.sh, deskless.sh, charts/backend/, charts/web/, .env.example, README.md, docs/kubernetes.md · in-progress
+- Phase 8 — 쿠버네티스 대시보드 · 유닛 1개 · 의존: Phase 6 · 푼다: — · 파일 집합: charts/dashboard/, deskless.sh, .env.example, README.md, docs/kubernetes.md · in-progress
 
-동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
+동시 가능: Phase 4·Phase 5
 
-지금: 진행 중 없음 · Next up: Phase 7
+지금: Phase 7, Phase 8 진행 중 · Next up: Phase 7
 
 ## 지금 할 일
-남은 두 Phase 중 고르기 — Phase 8 운영 준비(레지스트리 · 서버 k3s 설치 안내) 또는 Phase 7 부하율 기준 자동 증설(선택)
-- Phase 8 — 정할 것: 이미지 레지스트리(GHCR · Docker Hub · 서버 자체 레지스트리)
-- Phase 7 — CPU 기준으로 충분하면 하지 않는다(Grafana 서비스 부하로 CPU 증설이 부하율과 잘 맞는지 본 뒤 정한다)
-- 고르면 "Phase N 시작"
+Phase 7 · 8 확인 — 운영 실행 파일 · GHCR 올리기 · 받기 · 한 대씩 교체, 쿠버네티스 대시보드(웹)
+- 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 로컬 클러스터를 한 번 지운 뒤 .\deskless up — 전처럼 돌고 http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드에 로그인되는지(이미지 · GHCR 키는 비어도 된다)
+- GHCR — .env.example 의 이미지 절을 .env 에 옮겨 GHCR_USER · GHCR_PUSH_TOKEN 을 넣고 .\deskless push gateway 로 올라가는지(github.com 패키지 화면)
+- 프론트 요청서 2건(API_INTERNAL_URL · 공개 값 실행 때 읽기)을 프론트 세션에 보낸다
+- ok → 커밋 · 푸시하고 Phase 7 · 8 완료
 
 ## Scope & Actors
 
@@ -144,31 +144,32 @@ flowchart LR
 |------|---------|---------|
 | #22 | `kubectl get networkpolicy -n deskless` | 정책 확인 |
 
-### Phase 7 — 부하율 기준 자동 증설 (선택 — CPU 대신 대시보드 부하율로) · depends: Phase 5
+### Phase 7 — 운영 실행 파일 · GHCR (리눅스 서버에서 Docker 없이 k3s 로 같은 원클릭, 이미지는 GHCR 로 주고받기) · depends: Phase 6
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 23 | 부하율 기준 HPA | prometheus-adapter 로 이벤트 루프 부하율을 HPA 기준으로 — 대시보드 판정과 같은 값 | CPU 기준으로 충분하면 하지 않는다 | — | todo |
+| 23 | 운영 실행 파일 | 리눅스 서버에서 `git clone` → `./deskless-server.sh setup`(k3s · helm · nerdctl(BuildKit) · 값 파일 — 새 `.env` 는 `KUBE_CONTEXT=default` · `IMAGE_SOURCE=registry`) → `up`(같은 `.env` 키 · 같은 묶음 · 같은 차트 — `deskless.sh` 를 운영 모드로) | 서버마다 다른 값은 `.env` "이 서버" 절 · 서버 빌드도 남겨 둔다(막지 않는다) | — | in-progress |
+| 24 | GHCR 이미지 올리기 · 받기 · 한 대씩 교체 | 서비스 단위 `push [서비스…]` · `up [서비스…]`(고른 것만 새 태그, 나머지는 떠 있는 태그 그대로) · `restart [서비스…]`, 태그 = 하위 저장소 커밋 12자리, 받기 Secret · RollingUpdate(`maxSurge 1` · `maxUnavailable 0`). 프론트 공개 값은 실행 때(요청서) | 올리기 · 받기 키 둘 다 `.env` — PC · 서버 어디서나(사용자 2026-11-24), 비어도 로컬 build 실행 영향 없음 · 웹은 방안 b(이미지 하나) | 23 | in-progress |
 
 **Expected commands**:
 
 | Unit | Command | Purpose |
 |------|---------|---------|
-| #23 | `kubectl get hpa -n deskless` | 부하율 기준 확인 |
+| #23 | `./deskless-server.sh setup` · `./deskless-server.sh up` | 서버 준비 · 전부 설치 |
+| #24 | `.\deskless push gateway web` → `git pull --recurse-submodules && ./deskless-server.sh up gateway web` · `./deskless-server.sh restart web` | 올리기 → 받아 한 대씩 교체 · 다시 받기 |
 
-### Phase 8 — 운영 준비 (리눅스 서버 k3s 에 올릴 수 있게) · depends: Phase 6
+### Phase 8 — 쿠버네티스 대시보드 (클러스터 화면을 브라우저로 — 로그인 뒤) · depends: Phase 6
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 24 | 이미지 레지스트리 · 태그 | 운영은 레지스트리 이미지(하위 저장소 커밋 해시 태그) | 레지스트리 종류(아래 Open Decisions) | — | todo |
-| 25 | 운영 설치 안내 · `.env` 점검 | k3s 설치 · 도메인 · TLS · `INFRA_EXPOSE=0` · 비밀번호(첫 설치 전) · 대수 | — | 24 | todo |
+| 25 | 쿠버네티스 대시보드(웹) | Headlamp 웹 1대 + 로그인 문지기(nginx Basic 인증 — `.env` 의 `DASHBOARD_USER` · `DASHBOARD_PASSWORD`), 로컬은 PC `LOCAL_DASHBOARD_PORT`(14466), 운영은 port-forward | 직접 만든 차트(공식 차트 없이) · 들어온 사람은 ServiceAccount 권한 하나(기본 `cluster-admin`) · Headlamp 는 파드 안 127.0.0.1 에만(사용자 2026-11-24) | — | in-progress |
 
 **Expected commands**:
 
 | Unit | Command | Purpose |
 |------|---------|---------|
-| #24 | `./deskless.sh <묶음> up` (운영 `.env`) | 같은 명령으로 운영 설치 |
+| #25 | `./deskless.sh dashboard up` · `status` · `down` | 대시보드 설치 · 주소 · 지우기 |
 
 **Progress**: 22/25 units done (6/8 phases)
-**Next up**: Phase 7 부하율 기준 자동 증설 — 의존(Phase 5) 모두 완료
+**Next up**: Phase 7 운영 실행 파일 · GHCR(+ Phase 8 대시보드 — 같은 커밋) — 확인 뒤 완료
 
 ## Cross-Cutting Rules
 
@@ -176,11 +177,12 @@ flowchart LR
 - 브라우저 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 한 곳 — 앱의 주소 키에 넣는다. 로컬은 비우면 PC 포트(`LOCAL_GATEWAY_PORT` · `LOCAL_WEB_PORT` — 기본 13000 · 15000, PC `npm` 의 3000 · 5000 과 따로)의 `localhost` 주소.
 - PC · 사용자마다 다른 값(경로 · PC 포트 · 볼륨 · k3s 인자 · 기다리는 시간)은 실행 파일에 고정하지 않고 `.env` 의 "이 PC" 절 — 다른 환경도 `.env` 만 고쳐 같은 실행 · 확인(사용자 2026-11-24).
 - 실행은 `deskless.sh` 하나로 — 전부는 원클릭 `up`(먼저 모두 확인 · 로컬 클러스터부터, 묶음이 늘면 `up` 과 그 확인에 더한다), 묶음별은 `<묶음> <동작>` — 묶음마다 하위 명령을 더하고, 모든 명령은 `.env` 의 `KUBE_CONTEXT` 로만 클러스터에 닿는다.
-- 앱 대수는 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(모든 앱 기본값) — 다르면 HPA, 같으면 고정.
+- 앱 대수는 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(모든 앱 기본값) — 다르면 HPA, 같으면 고정. 증설 기준은 CPU — 부하율(이벤트 루프 사용률)은 Grafana 판정용이고 증설 기준으로 쓰지 않는다(Node 는 CPU 와 거의 같이 움직이고 부품이 늘지 않는다 — 사용자 2026-11-24, 큐 적체로 늘려야 할 때가 오면 KEDA).
 - Ingress 종류 · 저장소 종류 이름은 차트에 고정하지 않는다(`.env`).
-- 데이터 관리 도구 컨테이너는 넣지 않는다(PC 앱) — 예외 RabbitMQ 관리 화면 · 모니터링.
+- 데이터 관리 도구 컨테이너는 넣지 않는다(PC 앱) — 예외 RabbitMQ 관리 화면 · 모니터링 · 쿠버네티스 대시보드(로그인 문지기 뒤).
 - 앱이 배포에 기대하는 값은 `backend/docs/architecture.md:180` 을 따르고, 앱 쪽을 바꿔야 하면 요청서.
-- 클러스터 · 설치 명령은 사용자가 실행 — Claude 는 `helm lint` · `helm template` · `bash -n` 까지.
+- 운영 이미지는 GHCR — 서비스 단위로 올리고(`push`) 받아 한 대씩 교체(`up <서비스…>`), 태그 = 하위 저장소 커밋. 일부 명령만 쓰는 키(이미지 · GHCR · "이 서버")는 그 명령에서만 확인한다(사용자 2026-11-24).
+- 클러스터 · 설치 · 올리기 명령은 사용자가 실행 — Claude 는 `helm lint` · `helm template` · `bash -n` · 가짜 도구 확인까지.
 
 ## Open Decisions (roadmap-level)
 
@@ -190,9 +192,12 @@ flowchart LR
 - [x] 앱 값 파일 — deskless 가 받아 둔 하위 저장소 사본의 `.env`(`.env.example` 복사)에서 읽고 deskless `.env` 에는 클러스터 몫만, 같은 값을 두 번 적지 않는다(사용자 2026-11-23). 백엔드 · 프론트는 독립 프로젝트라 작업 폴더의 `.env` 와는 따로 둔다(사용자 2026-11-24 — 백엔드 `backend/.env`, 프론트는 Phase 4 에서 같은 방식) (Phase 3 · 4)
 - [x] 모니터링 방식 — 직접 만든 차트(옛 compose 그대로 + 앱 파드 자동 찾기), kube-prometheus-stack 은 쓰지 않는다. 로컬은 PC 입구 Grafana 13001 · Prometheus 19090, 운영은 port-forward(사용자 2026-11-24) (Phase 5)
 - [x] 프론트 서버 쪽 게이트웨이 주소 — 프론트에 요청서(`API_INTERNAL_URL`, 비면 `NEXT_PUBLIC_API_URL`), 차트가 `http://gateway:3000`. 프론트 값 파일은 `frontend/.env.production`, 없으면 `frontend/.env`(사용자 2026-11-24) (Phase 4)
-- [ ] 이미지 레지스트리 — GHCR · Docker Hub · 서버 자체 레지스트리 (Phase 8)
+- [x] 운영 이미지 — GHCR(`<IMAGE_REGISTRY>/deskless-<서비스>:<커밋>`), 보통 PC 올리기 · 서버 받기 — 양쪽 다 막지 않는다. 서버 안 빌드(`IMAGE_SOURCE=build` — nerdctl → k3s)도 남겨 둔다. 웹은 공개 값을 실행 때 읽어 이미지 하나(방안 b — 프론트 요청서)(사용자 2026-11-24) (Phase 7)
 
 ## Notes / Risks
+
+- 운영 `.env` 점검(기본 비밀번호 · 테스트 데이터 · `localhost` 주소가 남으면 멈춤) · HTTPS(인증서)는 하지 않기로 했다(사용자 2026-11-24 — 권장 중단). 필요해지면 새 Phase 로.
+- 웹 이미지는 프론트가 공개 값을 실행 때 읽기(요청서 `requests/frontend/2026-11-24-runtime-public-env.md`) 전까지 올린 쪽의 공개 주소가 박힌다 — 그때까지 운영용 웹은 서버에서 `push`.
 
 - `helm` v4.3.2 · `k3d` v5.9.0(k3s 1.35) 설치됨(2026-11-23) — 실제 클러스터 설치 확인(Phase 2 인프라)은 사용자가 아직.
 - 로컬 Docker Desktop(WSL2 커널 5.15)은 cgroup v1 — k3s 1.35 kubelet 이 거부해 클러스터 만들기에 `--kubelet-arg=fail-cgroupv1=false` 를 붙였다(2026-11-23). WSL 이 cgroup v2 가 되면 뺀다.

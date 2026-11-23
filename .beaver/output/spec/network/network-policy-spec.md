@@ -14,7 +14,7 @@ affected_data: ["NetworkPolicy default-deny-ingress · postgres · redis · rabb
 
 - **무엇을** `./deskless.sh up`(또는 묶음별 up)을 하면 네임스페이스가 기본 차단되고, 내부 서버는 게이트웨이만 · DB · 브로커 · Redis 는 앱 · 수집기만 · 지표 포트는 Prometheus 만 닿는다.
 - **왜** 옛 compose 의 내부 네트워크(internal · data)가 하던 격리를 쿠버네티스에서도 — 서비스는 게이트웨이를 거친 요청만 받는다는 전제(백엔드 InternalAuthGuard)를 네트워크에서도 지킨다.
-- **범위 밖** 나가는 쪽 제한(외부 연동 · DNS), 네임스페이스 밖 격리, 운영 Ingress 컨트롤러별 세부(Phase 8).
+- **범위 밖** 나가는 쪽 제한(외부 연동 · DNS), 네임스페이스 밖 격리, 운영 Ingress 컨트롤러별 세부(Phase 7).
 
 | 진입점 | 한 줄 요약 | 테스트 |
 |---|---|---|

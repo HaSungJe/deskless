@@ -14,7 +14,7 @@ affected_data: ["Secret deskless-monitoring", "Helm 릴리스 deskless-monitorin
 
 - **무엇을** 사용자가 `./deskless.sh monitoring up`(또는 원클릭 `up`)을 실행하면 Prometheus · Grafana · PostgreSQL · Redis 수집기가 클러스터에 뜨고, 앱 파드(늘고 줄어도)와 RabbitMQ 지표를 모아 옛 대시보드 2개(서비스 부하 · 인프라)로 보여 준다.
 - **왜** 백엔드에서 지운 모니터링(backend `3125886` `compose.monitoring.yml`)을 쿠버네티스로 옮긴다 — 자동 증설이 잘 되는지 보고, 나중의 부하율 기준 증설(Phase 7)이 기록 규칙을 쓴다.
-- **범위 밖** 부하율 기준 HPA(prometheus-adapter — Phase 7), 노드 · 쿠버네티스 자체 대시보드(kube-prometheus-stack 을 쓰지 않는다), 알림.
+- **범위 밖** 부하율 기준 증설(하지 않는다 — 증설은 CPU, 부하율은 판정용), 노드 · 쿠버네티스 자체 대시보드(kube-prometheus-stack 을 쓰지 않는다), 알림.
 
 | 진입점 | 한 줄 요약 | 테스트 |
 |---|---|---|

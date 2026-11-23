@@ -1,5 +1,5 @@
 # 원본: backend docker/prometheus/rules.yml(3125886) — 본문 그대로. 차트가 ConfigMap prometheus-config 로 /etc/prometheus/rules.yml 에 넣는다(바꾼 뒤 ./deskless.sh monitoring up)
-# 기록 규칙 — 서비스별 부하율 · 요청률 · 응답 시간을 미리 계산한다. 대시보드와 나중의 쿠버네티스 HPA(prometheus-adapter)가 같은 이름을 쓴다.
+# 기록 규칙 — 서비스별 부하율 · 요청률 · 응답 시간을 미리 계산한다. 대시보드가 쓴다(쿠버네티스 증설은 CPU 기준 — 부하율은 판정용, deskless 사용자 결정 2026-11-24).
 #
 # 부하율 = 이벤트 루프 사용률(ELU) — 앱은 이벤트 루프가 일한 · 쉰 누적 시간(nodejs_eventloop_time_seconds{state})을 내고 여기서 rate 로 나눈다.
 # Node 는 인스턴스 하나가 주로 코어 하나를 쓰므로 1.0(100%)이면 그 인스턴스는 더 받을 수 없다. 증설 기준선은 0.7(docs/monitoring.md).

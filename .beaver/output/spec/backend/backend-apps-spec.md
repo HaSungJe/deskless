@@ -14,7 +14,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 
 - **무엇을** 사용자가 `./deskless.sh backend up` 을 실행하면 gateway · user-service · admin-service · scheduler 가 쿠버네티스에 뜨고(마이그레이션이 먼저), 최소 < 최대인 앱은 CPU 사용률로 그 사이에서 대수가 자동으로 바뀐다.
 - **왜** 쿠버네티스를 쓰는 목적이 서버 자동 증설이다 — 모든 앱의 최소 · 최대를 `.env` 로 정한다(사용자 2026-11-23).
-- **범위 밖** 프론트 · 모니터링 차트(Phase 4 · 5), 네트워크 격리(Phase 6), 부하율 기준 자동 증설(Phase 7), 레지스트리 · 운영 Ingress 세부(Phase 8).
+- **범위 밖** 프론트 · 모니터링 차트(Phase 4 · 5), 네트워크 격리(Phase 6), 운영 실행 파일 · GHCR 이미지(Phase 7).
 
 | 진입점 | 한 줄 요약 | 테스트 |
 |---|---|---|
@@ -38,7 +38,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
    - `backend/.env` 에 비밀값 같은 이름(`PASSWORD` · `SECRET` · `TOKEN` · `_KEY` · `_CODE`)인데 모르는 키가 있으면 → 설정으로 넘기지 않고 멈춘다
 2. **DB · Redis 주소** — `.env` 에 `DATABASE_URL` · `REDIS_URL` 이 있으면 그대로(관리형 서비스), 없으면 인프라 계정으로 만든다(비밀번호는 퍼센트 인코딩).
 3. **이미지** — deskless 에 받아 둔 `backend/` 커밋으로 앱 4개 이미지를 빌드(이미 있으면 건너뜀)하고 `k3d image import` 로 클러스터에 넣는다.
-   - `KUBE_CONTEXT` 가 `k3d-` 가 아니면 → 레지스트리가 필요하다고 알리고 멈춘다(Phase 8)
+   - 이미지를 빌드(`IMAGE_SOURCE=build`)하는데 `KUBE_CONTEXT` 가 `k3d-` 가 아니고 운영 서버 모드도 아니면 → 멈춘다(운영 서버는 `deskless-server.sh` — Phase 7)
 4. **설정 넣기** — Secret `deskless-backend`(비밀값 + DB · Redis 주소) · ConfigMap `deskless-backend-env`(`backend/.env` 의 나머지 키 전부 — 클러스터가 정하는 키는 빼고 — + 브로커 주소 + `.env` 의 공개 주소)를 만들거나 갱신한다.
 5. **차트 설치** — `helm upgrade --install deskless-backend charts/backend --wait --timeout 15m`.
    - 마이그레이션 Job(pre-install · pre-upgrade hook)이 앱보다 먼저 돈다 — 실패하면 설치가 멈추고 앱은 그대로
@@ -72,7 +72,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 | `backend/.env.example` 그대로 | ConfigMap 키 14개 + 브로커 주소 + 공개 주소 3개(`.env` 의 13000 · 15000), PC 용 주소 · 포트 · 관리자 계정은 빠진다 | — (가짜 도구로 돌려 확인) |
 | 운영 클러스터인데 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 비었다 | "운영은 공개 도메인" 으로 멈춤 — 클러스터에 닿지 않는다(로컬은 PC 포트로 정해진다) | — (가짜 도구로 돌려 확인) |
 | 최소 > 최대 | "✗ <APP>_REPLICAS_MIN(…)이 <APP>_REPLICAS_MAX(…)보다 큽니다" · 멈춤 | — (임시 설정 파일 · 차트 fail 둘 다 확인) |
-| 로컬 k3d 가 아닌 클러스터 | "✗ 로컬 k3d 클러스터(KUBE_CONTEXT=k3d-…)가 아니면 레지스트리 이미지가 필요합니다" · 멈춤 | — (임시 설정 파일로 확인) |
+| 로컬 k3d 가 아닌 클러스터 | "✗ 이 실행 파일은 로컬(Docker Desktop + k3d) 전용입니다" · 멈춤 | — (임시 설정 파일로 확인) |
 | 비밀번호에 `@ : /` 같은 글자가 있다 | `DATABASE_URL` · `REDIS_URL` 에 퍼센트 인코딩으로 들어간다 | — (urlencode 를 직접 돌려 확인) |
 | 마이그레이션이 실패한다 | Helm 설치 실패 · 기존 앱 그대로 | — (클러스터 실행은 사용자 확인) |
 
@@ -225,7 +225,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 
 ## 결정한 것
 
-- [x] 이미지는 스크립트가 빌드해 `k3d image import` — 레지스트리 · Tilt 는 쓰지 않는다(운영 레지스트리는 Phase 8).
+- [x] 이미지는 스크립트가 빌드해 `k3d image import` — Tilt 는 쓰지 않는다. 운영은 GHCR 에서 받는다(Phase 7).
 - [x] 주소는 따로 — 로컬 클러스터 게이트웨이 `localhost:13000` · 웹 `localhost:15000`(PC `npm` 의 3000 · 5000 과 부딪히지 않게 — 사용자 2026-11-23), 운영 `api.<도메인>` · `<도메인>`. 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 정한다.
 - [x] 마이그레이션은 설치 · 업그레이드마다 자동(Helm pre hook) — 손으로 다시 돌리는 `backend migrate` 도 둔다.
 - [x] 모든 앱에 최소 · 최대 — 최소 < 최대면 HPA, 같으면 고정. 기준은 코어 1개의 70%(대시보드 부하율과 같은 뜻).

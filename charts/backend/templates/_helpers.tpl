@@ -11,9 +11,18 @@ app.kubernetes.io/name: {{ . }}
 app.kubernetes.io/part-of: deskless-backend
 {{- end }}
 
-{{/* 앱 이미지 — dict "root" $ "app" <앱 이름> → deskless/<앱>:<태그> */}}
+{{/* 앱 이미지 — dict "root" $ "app" <앱 이름> → <imagePrefix><앱>:<태그>(앱별 apps.<앱>.imageTag 가 있으면 그것, 없으면 imageTag) */}}
 {{- define "backend.image" -}}
-{{ printf "%s/%s:%s" .root.Values.imageRepo .app .root.Values.imageTag }}
+{{- $app := index .root.Values.apps .app | default dict -}}
+{{ printf "%s%s:%s" .root.Values.imagePrefix .app (default .root.Values.imageTag $app.imageTag) }}
+{{- end }}
+
+{{/* GHCR 받기 Secret — imagePullSecret 이 있을 때만(registry) */}}
+{{- define "backend.pullSecrets" -}}
+{{- with .Values.imagePullSecret }}
+imagePullSecrets:
+  - name: {{ . }}
+{{- end }}
 {{- end }}
 
 {{/* Secret 의 키 하나를 같은 이름의 env 로 — dict "root" $ "key" <키> */}}
@@ -32,10 +41,11 @@ metadata:
     {{- include "backend.labels" "backend-migrate" | nindent 4 }}
 spec:
   restartPolicy: Never
+  {{- include "backend.pullSecrets" . | nindent 2 }}
   containers:
     - name: migrate
       image: {{ include "backend.image" (dict "root" . "app" "user-service") }}
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: {{ .Values.imagePullPolicy }}
       command: ['node', 'dist/apps/user-service/apps/user-service/src/migrate.js']
       env:
         {{- include "backend.secretEnv" (dict "root" . "key" "DATABASE_URL") | nindent 8 }}

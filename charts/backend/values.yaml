@@ -1,8 +1,13 @@
 # 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
 
-# 이미지 — deskless/<앱>:<태그>. ./deskless.sh 가 backend/ 커밋으로 빌드하고 태그를 넘긴다
-imageRepo: deskless
+# 이미지 — <imagePrefix><앱>:<태그>. ./deskless.sh 가 IMAGE_SOURCE 로 넘긴다
+#   build(이 컴퓨터에서 빌드) → deskless/<앱>, registry(GHCR) → ghcr.io/<계정>/deskless-<앱>
+imagePrefix: deskless/
 imageTag: local
+# 받는 방식 — build 는 IfNotPresent(클러스터에 넣어 둔 것), registry 는 Always(같은 태그를 다시 올려도 새로 받는다)
+imagePullPolicy: IfNotPresent
+# GHCR 받기 Secret 이름 — registry 일 때 ./deskless.sh 가 GHCR_PULL_TOKEN 으로 만든다(build 는 비움)
+imagePullSecret: ''
 
 # 설정 · 비밀값 해시 — ./deskless.sh 가 넘긴다. 바뀌면 파드가 새 값으로 다시 뜬다(Secret · ConfigMap 은 파드를 다시 띄우지 않으면 읽히지 않는다)
 configHash: ''
@@ -38,6 +43,7 @@ gateway:
 #   metricsPortEnv             지표 · 헬스 체크 포트 env(9464 — /metrics · /health/live · /health/ready)
 #   files                      공용 파일 볼륨을 /app/storage/files 에 붙일지(AWS_S3_BUCKET 이 빌 때 같은 폴더를 본다)
 #   secretKeys                 이 앱에만 주는 비밀값(Secret 의 키) — 쓰지 않는 다른 앱 · 관리자 비밀값은 주지 않는다
+#   imageTag                   (선택) 이 앱만 다른 태그 — ./deskless.sh 가 서비스를 골라 갱신할 때 나머지 앱은 지금 떠 있는 태그로 넘긴다(비우면 위 imageTag)
 apps:
     gateway:
         replicasMin: 2

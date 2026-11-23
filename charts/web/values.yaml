@@ -1,8 +1,14 @@
 # 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
 
-# 이미지 — deskless/web:<태그>. ./deskless.sh 가 frontend/ 커밋 + 빌드 값 해시로 빌드하고 태그를 넘긴다(NEXT_PUBLIC_* 는 빌드 때 박힌다)
-imageRepo: deskless
+# 이미지 — <imagePrefix>web:<태그>. ./deskless.sh 가 IMAGE_SOURCE 로 넘긴다
+#   build(이 컴퓨터에서 빌드) → deskless/web, registry(GHCR) → ghcr.io/<계정>/deskless-web
+#   공개 값(NEXT_PUBLIC_*)은 실행 때 ConfigMap 으로도 넘긴다 — 프론트가 실행 때 읽게 되면 이미지 하나를 모든 환경에 쓴다(requests/frontend 2026-11-24)
+imagePrefix: deskless/
 imageTag: local
+# 받는 방식 — build 는 IfNotPresent(클러스터에 넣어 둔 것), registry 는 Always(같은 태그를 다시 올려도 새로 받는다)
+imagePullPolicy: IfNotPresent
+# GHCR 받기 Secret 이름 — registry 일 때 ./deskless.sh 가 GHCR_PULL_TOKEN 으로 만든다(build 는 비움)
+imagePullSecret: ''
 
 # 설정 · 비밀값 해시 — ./deskless.sh 가 넘긴다. 바뀌면 파드가 새 값으로 다시 뜬다
 configHash: ''

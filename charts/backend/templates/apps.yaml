@@ -20,6 +20,12 @@ spec:
   replicas: {{ $app.replicasMin }}
   {{- end }}
   {{- /* 최소 < 최대면 replicas 를 두지 않는다 — 대수는 HPA(hpa.yaml)가 정하고, 설치를 다시 해도 줄지 않는다 */}}
+  # 새 이미지로 바꿀 때 한 대씩 — 새 파드가 준비되면 옛 파드를 하나 내린다(늘 정한 대수 이상이 떠 있다)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "backend.selector" $name | nindent 6 }}
@@ -30,6 +36,7 @@ spec:
       annotations:
         deskless/config-hash: {{ $.Values.configHash | quote }}
     spec:
+      {{- include "backend.pullSecrets" $ | nindent 6 }}
       # 종료 신호 → preStop 대기(Service 에서 빠질 시간) → 앱 종료(준비 상태 503 · 연결 정리)
       terminationGracePeriodSeconds: 40
       {{- if $app.files }}
@@ -37,7 +44,7 @@ spec:
         # 공용 파일 폴더(노드 폴더)는 root 소유로 만들어진다 — 앱(node 사용자)이 쓸 수 있게 소유자를 맞춘다
         - name: files-owner
           image: {{ include "backend.image" (dict "root" $ "app" $name) }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
           securityContext:
             runAsUser: 0
           command: ['sh', '-c', 'chown node:node /app/storage/files']
@@ -48,7 +55,7 @@ spec:
       containers:
         - name: {{ $name }}
           image: {{ include "backend.image" (dict "root" $ "app" $name) }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
           # 비밀이 아닌 앱 설정 — .env 의 백엔드 키(./deskless.sh 가 ConfigMap 으로)
           envFrom:
             - configMapRef:

@@ -1,0 +1,9 @@
+# 쿠버네티스 대시보드 차트 — Headlamp(웹)을 클러스터 안에 1대, 앞에 로그인(Basic 인증) 문지기(nginx)를 붙여 브라우저로 본다
+# 로그인 계정은 .env 의 DASHBOARD_USER · DASHBOARD_PASSWORD, 들어오면 Headlamp 는 파드의 ServiceAccount 권한으로 클러스터를 본다(사용자 결정 2026-11-24)
+# 설치 · 지우기는 ./deskless.sh dashboard up | down (.env → Secret → 이 차트). 규칙: docs/kubernetes.md
+apiVersion: v2
+name: deskless-dashboard
+description: deskless 쿠버네티스 대시보드 — Headlamp 웹 + 로그인 문지기(nginx Basic 인증)
+type: application
+version: 0.1.0
+appVersion: '0.46.0'

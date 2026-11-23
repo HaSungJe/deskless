@@ -1,0 +1,25 @@
+# 네트워크 격리(대시보드) — 들어오는 쪽만(네임스페이스 기본 차단은 인프라 차트)
+# - expose(DASHBOARD_EXPOSE) 면 문지기 8080 을 어디서나(로컬 입구 — 들어와도 로그인을 거친다). 아니면 kubectl port-forward 로만(파드 안으로 바로 들어가 정책과 무관)
+# - Headlamp(4466)는 파드 안 127.0.0.1 에만 열려 있어 정책이 따로 필요 없다
+# 끄기: NETWORK_POLICY=0(.env) → networkPolicy.enabled=false
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "dashboard.selector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  {{- if .Values.expose }}
+  ingress:
+    - ports:
+        - port: 8080
+  {{- else }}
+  # 열지 않을 때 — 들어오는 연결 없음(port-forward 만)
+  ingress: []
+  {{- end }}
+{{- end }}

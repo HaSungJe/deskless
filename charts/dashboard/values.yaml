@@ -1,0 +1,31 @@
+# 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
+
+# Secret 이름 — ./deskless.sh 가 만든다(차트는 만들지 않는다). 키:
+#   HTPASSWD   로그인 계정 한 줄(<DASHBOARD_USER>:<비밀번호 apr1 해시>) — nginx Basic 인증 파일
+secretName: deskless-dashboard
+
+# 비밀값 해시 — ./deskless.sh 가 넘긴다. 바뀌면(계정 · 비밀번호) 파드가 새 값으로 다시 뜬다
+configHash: ''
+
+# 밖(노드 포트)으로 열지 — DASHBOARD_EXPOSE. true 면 Service dashboard(4466)를 LoadBalancer(k3s 내장 servicelb)로 연다
+# 로컬 k3d 가 PC 127.0.0.1 의 LOCAL_DASHBOARD_PORT → 4466 으로 넘긴다(기본 14466). 운영은 false(kubectl port-forward 로 본다)
+expose: false
+
+# 대시보드가 클러스터를 보는 권한 — 들어온 사람은 모두 이 권한 하나로 본다(Headlamp 파드의 ServiceAccount)
+# cluster-admin = 보기 · 로그 · 재시작 · 대수 · 지우기까지. 보기만이면 view(로그 포함, 파드 안 명령 · 바꾸기 없음)
+clusterRole: cluster-admin
+
+headlamp:
+    image: ghcr.io/headlamp-k8s/headlamp:v0.46.0
+    resources:
+        requests: {cpu: 50m, memory: 64Mi}
+
+# 로그인 문지기 — Basic 인증 뒤 Headlamp 로 넘기며 로그인한 이름을 X-Forwarded-User 로 붙인다(Headlamp 의 프록시 인증 — 자기 로그인 화면을 건너뛴다)
+auth:
+    image: nginxinc/nginx-unprivileged:1.30.6-alpine
+    resources:
+        requests: {cpu: 10m, memory: 16Mi}
+
+# 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
+networkPolicy:
+    enabled: true

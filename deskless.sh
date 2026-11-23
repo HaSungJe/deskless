@@ -3,24 +3,33 @@
 #
 #   (Windows) .\deskless setup   원클릭 설치 — 프로그램(winget) · 값 파일(deskless.cmd → scripts/deskless-windows.ps1, Git Bash 없이)
 #   ./deskless.sh up               전부 설치 · 갱신(원클릭) — 값 파일 · 필수 값 · 도구를 먼저 모두 확인하고, 로컬(k3d)이면 Docker 켜기 · 클러스터 만들기부터 끝까지. Windows 는 deskless.cmd(더블클릭 = up)
-#   ./deskless.sh status           전부 상태(인프라 · 백엔드 · 프론트 · 모니터링)
+#   ./deskless.sh up <서비스…>      골라 갱신 — gateway · user-service · admin-service · scheduler · web(backend = 앱 4개). 인프라 · 모니터링 · 대시보드 · 고르지 않은 앱은 그대로(지금 떠 있는 이미지)
+#   ./deskless.sh push [서비스…]   이미지를 GHCR 에 올리기(비우면 5개 전부) — IMAGE_REGISTRY · GHCR_USER · GHCR_PUSH_TOKEN. 클러스터에는 닿지 않는다
+#   ./deskless.sh restart [서비스…] 파드를 한 대씩 다시 띄우기(비우면 5개 전부) — 같은 태그를 다시 올렸을 때(registry 는 이미지를 다시 받는다)
+#   ./deskless.sh status           전부 상태(인프라 · 백엔드 · 프론트 · 모니터링 · 대시보드)
 #   ./deskless.sh infra up         인프라 설치 · 갱신(PostgreSQL · RabbitMQ 앱 계정 · Redis · PostgreSQL 백업)
 #   ./deskless.sh infra status     파드 · Service · 마지막 백업
 #   ./deskless.sh infra backup     지금 PostgreSQL 백업 한 번
 #   ./deskless.sh infra down       인프라 지우기 — 데이터 · 백업(노드의 INFRA_DATA_DIR)과 Secret 은 남는다
-#   ./deskless.sh backend up       백엔드 앱 4개 — 이미지 빌드 · 로컬 클러스터에 넣기 · 마이그레이션 · 설치(앱별 자동 증설)
+#   ./deskless.sh backend up       백엔드 앱 4개 — 이미지(빌드 또는 GHCR) · 마이그레이션 · 설치(앱별 자동 증설)
 #   ./deskless.sh backend status   앱 · 대수 · 자동 증설(HPA) 상태
 #   ./deskless.sh backend migrate  마이그레이션만 한 번
 #   ./deskless.sh backend down     백엔드 앱 지우기 — 공용 파일 · Secret · 설정은 남는다
-#   ./deskless.sh web up           프론트 — 이미지 빌드(공개 주소를 박는다) · 로컬 클러스터에 넣기 · 설치(자동 증설)
+#   ./deskless.sh web up           프론트 — 이미지(빌드 또는 GHCR) · 설치(자동 증설)
 #   ./deskless.sh web status       프론트 · 대수 · 자동 증설(HPA) 상태
 #   ./deskless.sh web down         프론트 지우기 — Secret · 설정은 남는다
 #   ./deskless.sh monitoring up    모니터링 — Prometheus · Grafana · PostgreSQL · Redis 수집기
 #   ./deskless.sh monitoring status 모니터링 파드 · 주소
 #   ./deskless.sh monitoring down  모니터링 지우기 — 지표 · 대시보드 데이터(노드의 INFRA_DATA_DIR)와 Secret 은 남는다
+#   ./deskless.sh dashboard up     쿠버네티스 대시보드(Headlamp 웹) — 로그인(DASHBOARD_USER · DASHBOARD_PASSWORD) 뒤 브라우저로 클러스터를 본다
+#   ./deskless.sh dashboard status 대시보드 파드 · 주소
+#   ./deskless.sh dashboard down   대시보드 지우기 — Secret 은 남는다
 #
-# 값은 세 파일에서 읽는다 — .env(클러스터 · 인프라 · 대수 · 공개 주소 · 모니터링) · backend/.env(백엔드 앱 값) · frontend/.env.production(없으면 frontend/.env — 프론트 값).
+# 값은 세 파일에서 읽는다 — .env(클러스터 · 인프라 · 대수 · 공개 주소 · 모니터링 · 대시보드) · backend/.env(백엔드 앱 값) · frontend/.env.production(없으면 frontend/.env — 프론트 값).
 # 백엔드 · 프론트 값 파일은 deskless 가 받아 둔 사본에 두는 클러스터용 파일이다(각 .env.example 복사 — 작업 폴더의 .env 와 따로).
+# 이미지는 .env 의 IMAGE_SOURCE — build(기본: 이 컴퓨터에서 빌드 — 로컬 docker → k3d, 서버 nerdctl → k3s) · registry(GHCR 에서 받기 — 올리기는 push).
+# 태그는 커밋(백엔드 앱 backend/ · 프론트 frontend/, 12자리) — 올린 쪽 · 받는 쪽이 같은 deskless 커밋이면 같은 태그를 찾는다.
+# 이 파일은 로컬(Docker + k3d) 기준이다 — 운영 서버(리눅스 · k3s, Docker 없이)는 deskless-server.sh 가 이 파일을 운영 모드(DESKLESS_TARGET=server)로 부른다.
 # 모든 명령은 .env 의 KUBE_CONTEXT 클러스터에만 닿는다(비면 멈춘다). Windows 는 deskless.cmd(Git Bash 로 실행 — PowerShell 에서 .deskless up), 서버는 bash 로 실행한다.
 set -euo pipefail
 
@@ -31,7 +40,7 @@ BACKEND_ENV_FILE="${DESKLESS_BACKEND_ENV_FILE:-$ROOT/backend/.env}"
 NAMESPACE=deskless
 # PC · 사용자마다 다를 수 있는 값(경로 · PC 포트 · 볼륨 이름 · k3s 인자 · 기다리는 시간)은 여기 고정하지 않고 .env 에서 읽는다
 # — 다른 PC 도 .env 만 고쳐 같은 실행 · 확인을 한다(사용자 결정 2026-11-24, .env.example 의 "이 PC" 절)
-LOCAL_PORT_KEYS=(LOCAL_GATEWAY_PORT LOCAL_WEB_PORT LOCAL_POSTGRES_PORT LOCAL_RABBITMQ_PORT LOCAL_RABBITMQ_ADMIN_PORT LOCAL_REDIS_PORT LOCAL_GRAFANA_PORT LOCAL_PROMETHEUS_PORT LOCAL_API_PORT)
+LOCAL_PORT_KEYS=(LOCAL_GATEWAY_PORT LOCAL_WEB_PORT LOCAL_POSTGRES_PORT LOCAL_RABBITMQ_PORT LOCAL_RABBITMQ_ADMIN_PORT LOCAL_REDIS_PORT LOCAL_GRAFANA_PORT LOCAL_PROMETHEUS_PORT LOCAL_DASHBOARD_PORT LOCAL_API_PORT)
 INFRA_RELEASE=deskless-infra
 INFRA_SECRET=deskless-infra
 # Secret 에 넣는 키 — 차트(charts/infra)가 읽는 비밀값만. 인프라 계정은 .env, 브로커 앱 계정은 앱이 쓰는 값 그대로 backend/.env 에서
@@ -58,10 +67,23 @@ WEB_SECRET_REQUIRED=(NEXTAUTH_SECRET)
 WEB_SECRET_OPTIONAL=(KAKAO_LOGIN_SECRET_ID NAVER_LOGIN_SECRET_ID TOSS_SECRET_KEY)
 # 프론트 값 파일에 있어도 쓰지 않는 키 — 공개 주소는 .env, 포트 · 바인딩 · 지표 · 서버 안 게이트웨이 주소는 차트가 정한다
 WEB_CLUSTER_KEYS=(NEXT_PUBLIC_API_URL NEXT_PUBLIC_SERVER_URL NEXTAUTH_URL API_INTERNAL_URL PORT HOSTNAME METRICS_PORT METRICS_HOST TZ)
-# 빌드에만 쓰는 키(코드에 박힌다 — 실행 값으로는 넘기지 않는다): NEXT_PUBLIC_* · NEXT_IMAGE_*
+# 공개 값 NEXT_PUBLIC_* 는 빌드(코드에 박힌다)와 실행(ConfigMap — 프론트가 실행 때 읽으면 이미지 하나를 모든 환경에 쓴다) 둘 다,
+# 빌드에만 쓰는 키(실행 값으로 넘기지 않는다): basePath(NEXT_PUBLIC_LOCAL_SERVER_PREFIX) · 이미지 호스트(NEXT_IMAGE_*)
 
 MONITORING_RELEASE=deskless-monitoring
 MONITORING_SECRET=deskless-monitoring
+
+DASHBOARD_RELEASE=deskless-dashboard
+DASHBOARD_SECRET=deskless-dashboard
+
+# 이미지를 만드는 서비스(이미지 이름) — 백엔드 앱 4개 + 프론트. 고르는 명령(up · push · restart)이 받는 이름
+IMAGE_SERVICES=("${BACKEND_APPS[@]}" web)
+# GHCR 받기 Secret — IMAGE_SOURCE=registry 일 때 GHCR_PULL_TOKEN 으로 만든다
+PULL_SECRET=deskless-registry
+# 비어도 되는 .env 키 — 쓰는 명령만 확인한다(이미지 · GHCR 은 push · registry, "이 서버" 절은 deskless-server.sh). 예시에 있어도 값 파일에 없다고 멈추지 않는다
+OPTIONAL_ENV_KEYS=(IMAGE_SOURCE IMAGE_REGISTRY GHCR_USER GHCR_PUSH_TOKEN GHCR_PULL_TOKEN K3S_VERSION HELM_VERSION NERDCTL_VERSION KUBECONFIG_FILE K3S_CONTAINERD_SOCKET)
+# 고른 서비스(select_services)
+SELECTED=()
 
 declare -A ENV=() BENV=() FENV=()
 BENV_LOADED=''
@@ -108,6 +130,7 @@ read_env_file() {
 load_env() {
     [ -f "$ENV_FILE" ] || die ".env 가 없습니다 — .env.example 을 .env 로 복사하세요(로컬은 그대로 쓴다 — ./deskless.sh up 은 없으면 복사한다) ($ENV_FILE)"
     read_env_file "$ENV_FILE" ENV
+    image_source_ok || die ".env 의 IMAGE_SOURCE 는 build 또는 registry 여야 합니다(지금: ${ENV[IMAGE_SOURCE]})"
 }
 
 # backend/.env 읽기(백엔드 값이 필요한 명령만) — 백엔드 작업 폴더의 .env 와는 따로 두는 클러스터용 파일
@@ -154,9 +177,14 @@ web_known_key() {
     return 1
 }
 
-# 빌드에만 쓰는 프론트 키(NEXT_PUBLIC_* · NEXT_IMAGE_*) — 코드에 박히는 공개 값이라 실행 값 · 비밀값 검사에서 뺀다
+# 빌드에만 쓰는 프론트 키 — basePath(NEXT_PUBLIC_LOCAL_SERVER_PREFIX) · 이미지 호스트(NEXT_IMAGE_*). next.config 가 빌드 때 정해 실행 값으로는 넘기지 않는다
 web_build_only_key() {
-    [[ "$1" == NEXT_PUBLIC_* || "$1" == NEXT_IMAGE_* ]]
+    [[ "$1" == NEXT_IMAGE_* || "$1" == NEXT_PUBLIC_LOCAL_SERVER_PREFIX ]]
+}
+
+# 공개 값(NEXT_PUBLIC_*) — 브라우저에 그대로 보이는 값이라 비밀값 검사에서 뺀다(빌드 · 실행 둘 다 넘긴다)
+web_public_key() {
+    [[ "$1" == NEXT_PUBLIC_* ]]
 }
 
 # 프론트 값 파일에서 비밀값 같은 이름인데 deskless.sh 가 모르는 키(한 줄에 하나)
@@ -165,6 +193,7 @@ unknown_web_secret_keys() {
     for k in "${!FENV[@]}"; do
         web_known_key "$k" && continue
         web_build_only_key "$k" && continue
+        web_public_key "$k" && continue
         case "$k" in
             *PASSWORD* | *SECRET* | *TOKEN* | *_KEY | *_KEY_* | *_CODE) echo "$k" ;;
         esac
@@ -272,6 +301,204 @@ urlencode() {
         esac
     done
     printf '%s' "$out"
+}
+
+# 운영 서버 모드인지 — deskless-server.sh 가 DESKLESS_TARGET=server 로 부른다(리눅스 · k3s, Docker 없이)
+is_server() {
+    [ "${DESKLESS_TARGET:-}" = server ]
+}
+
+# 이미지를 만드는 도구 — 로컬은 docker(빌드) + k3d(클러스터에 넣기), 운영 서버는 nerdctl(BuildKit)로 k3s containerd 에 바로 빌드
+image_tools() {
+    if is_server; then
+        echo nerdctl
+    else
+        echo docker k3d
+    fi
+}
+
+# k3s 의 containerd(네임스페이스 k8s.io)에 대고 nerdctl — 소켓은 .env 의 K3S_CONTAINERD_SOCKET, root 가 아니면 sudo
+nerdctl_k3s() {
+    local sock="${ENV[K3S_CONTAINERD_SOCKET]:-}"
+    [ -n "$sock" ] || die ".env 에 K3S_CONTAINERD_SOCKET 이 필요합니다(.env.example 의 \"이 서버\" 절)"
+    if [ "$(id -u)" -eq 0 ]; then
+        nerdctl --address "$sock" --namespace k8s.io "$@"
+    else
+        sudo nerdctl --address "$sock" --namespace k8s.io "$@"
+    fi
+}
+
+# 이미지를 만들 수 있는 대상인지 — 로컬 k3d 또는 운영 서버
+require_image_target() {
+    is_server && return 0
+    [[ "${ENV[KUBE_CONTEXT]}" == k3d-* ]] || die "deskless.sh · deskless.cmd 는 로컬(Docker Desktop + k3d, KUBE_CONTEXT=k3d-…) 전용입니다 — 운영 서버(리눅스 · k3s)는 ./deskless-server.sh"
+}
+
+# 이미지가 이미 있는지
+image_exists() {
+    if is_server; then
+        nerdctl_k3s image inspect "$1" > /dev/null 2>&1
+    else
+        docker image inspect "$1" > /dev/null 2>&1
+    fi
+}
+
+# 이미지 빌드 — build_image <이름:태그> <빌드 폴더> [빌드 인자…]
+build_image() {
+    local name="$1" ctx="$2"
+    shift 2
+    if is_server; then
+        nerdctl_k3s build "$@" -t "$name" "$ctx"
+    else
+        DOCKER_BUILDKIT=1 docker build "$@" -t "$name" "$ctx"
+    fi
+}
+
+# 클러스터에 이미지 넣기 — 로컬 k3d 는 import, 운영 서버는 이미 k3s 안에 빌드돼 할 일이 없다
+load_images() {
+    if is_server; then
+        step "이미지 — k3s 안에 바로 빌드했다(넣기 없음)"
+        return 0
+    fi
+    local cluster="${ENV[KUBE_CONTEXT]#k3d-}"
+    step "로컬 클러스터 $cluster 에 이미지 넣기"
+    k3d image import "$@" -c "$cluster"
+}
+
+# IMAGE_SOURCE 값이 맞는지 — build(비우면) · registry
+image_source_ok() {
+    case "${ENV[IMAGE_SOURCE]:-build}" in
+        build | registry) return 0 ;;
+    esac
+    return 1
+}
+
+# 이미지 받는 방식 — build(이 컴퓨터에서 빌드) · registry(GHCR 에서 받기)
+image_source() {
+    printf '%s' "${ENV[IMAGE_SOURCE]:-build}"
+}
+
+is_registry() {
+    [ "$(image_source)" = registry ]
+}
+
+# 이미지 이름 앞부분 — build 는 deskless/, registry 는 <IMAGE_REGISTRY>/deskless-(GHCR 은 계정 아래 저장소가 앱마다 하나). registry 는 부르기 전에 require_registry
+image_prefix() {
+    if [ "${1:-$(image_source)}" = registry ]; then
+        printf '%s/deskless-' "${ENV[IMAGE_REGISTRY]%/}"
+    else
+        printf 'deskless/'
+    fi
+}
+
+# 레지스트리 주소 — IMAGE_REGISTRY 의 첫 부분(ghcr.io/<계정> → ghcr.io)
+registry_host() {
+    printf '%s' "${ENV[IMAGE_REGISTRY]%%/*}"
+}
+
+# GHCR 값 — 쓰는 명령에서만 확인한다(없어도 build 실행에는 영향 없다). pull: 받기 키, push: 올리기 키
+require_registry() {
+    require IMAGE_REGISTRY GHCR_USER
+    case "$1" in
+        pull) require GHCR_PULL_TOKEN ;;
+        push) require GHCR_PUSH_TOKEN ;;
+    esac
+}
+
+# 이미지 엔진 — 로컬 docker, 운영 서버 nerdctl(k3s containerd)
+engine_tool() {
+    if is_server; then
+        echo nerdctl
+    else
+        echo docker
+    fi
+}
+
+# 빌드에 필요한 도구 — build 일 때만(registry 는 클러스터가 받는다)
+build_tools() {
+    if ! is_registry; then
+        image_tools
+    fi
+}
+
+# 이미지 태그 — 백엔드 앱은 backend/ 커밋, 프론트는 frontend/ 커밋(12자리로 고정 — PC · 서버가 같은 태그를 만든다)
+source_tag() {
+    local dir=backend
+    [ "$1" = web ] && dir=frontend
+    git -C "$ROOT/$dir" rev-parse --short=12 HEAD
+}
+
+# 목록에 있는지 — in_list <값> <목록…>
+in_list() {
+    local x="$1" v
+    shift
+    for v in "$@"; do
+        [ "$v" = "$x" ] && return 0
+    done
+    return 1
+}
+
+# 서비스 고르기 → SELECTED(IMAGE_SERVICES 순서, 겹침 없이) — 이름 · backend(앱 4개), 비우면 전부
+select_services() {
+    local s a want=()
+    [ "$#" -gt 0 ] || set -- "${IMAGE_SERVICES[@]}"
+    for s in "$@"; do
+        if [ "$s" = backend ]; then
+            want+=("${BACKEND_APPS[@]}")
+        else
+            in_list "$s" "${IMAGE_SERVICES[@]}" || die "모르는 서비스: $s — ${IMAGE_SERVICES[*]} · backend(앱 4개)"
+            want+=("$s")
+        fi
+    done
+    SELECTED=()
+    for a in "${IMAGE_SERVICES[@]}"; do
+        if in_list "$a" "${want[@]}"; then
+            SELECTED+=("$a")
+        fi
+    done
+}
+
+# 지금 떠 있는 앱의 이미지(없으면 빈 문자열)
+deployed_image() {
+    kube -n "$NAMESPACE" get deployment "$1" -o "jsonpath={.spec.template.spec.containers[?(@.name==\"$1\")].image}" 2> /dev/null || true
+}
+
+# GHCR 받기 Secret(dockerconfigjson) — 다시 돌리면 갱신. 키는 임시 파일로만 넘긴다(명령줄 · 로그에 남지 않게)
+ensure_pull_secret() {
+    local host file src auth
+    host="$(registry_host)"
+    file="$WORK_DIR/registry.json"
+    auth="$(printf '%s:%s' "${ENV[GHCR_USER]}" "${ENV[GHCR_PULL_TOKEN]}" | base64 | tr -d '\n')"
+    printf '{"auths":{%s:{"username":%s,"password":%s,"auth":"%s"}}}' \
+        "$(yaml_str "$host")" "$(yaml_str "${ENV[GHCR_USER]}")" "$(yaml_str "${ENV[GHCR_PULL_TOKEN]}")" "$auth" > "$file"
+    src="$file"
+    command -v cygpath > /dev/null 2>&1 && src="$(cygpath -w "$file")"
+    step "GHCR 받기 Secret $PULL_SECRET($host · ${ENV[GHCR_USER]})"
+    kube -n "$NAMESPACE" create secret generic "$PULL_SECRET" --type=kubernetes.io/dockerconfigjson --from-file=".dockerconfigjson=$src" --dry-run=client -o yaml | kube apply -f -
+}
+
+# 차트에 넘기는 이미지 값 — 앞부분 · 받는 방식 · 받기 Secret(values 파일에 이어 쓴다)
+image_values() {
+    if is_registry; then
+        printf 'imagePrefix: %s\nimagePullPolicy: Always\nimagePullSecret: %s\n' "$(yaml_str "$(image_prefix registry)")" "$(yaml_str "$PULL_SECRET")"
+    else
+        printf 'imagePrefix: %s\nimagePullPolicy: IfNotPresent\nimagePullSecret: ""\n' "$(yaml_str "$(image_prefix build)")"
+    fi
+}
+
+# 프론트 빌드 값 — 프론트 값 파일 그대로(따옴표 · 주석 유지) + 공개 주소 3개를 .env 의 값으로 — web_build_env <파일> <게이트웨이 주소> <웹 주소>
+web_build_env() {
+    local out="$1" gw_url="$2" web_url="$3"
+    grep -vE '^[[:space:]]*(NEXT_PUBLIC_API_URL|NEXT_PUBLIC_SERVER_URL|NEXTAUTH_URL)[[:space:]]*=' "$FENV_FILE" > "$out" || true
+    printf '\n# deskless 공개 주소(.env)\nNEXT_PUBLIC_API_URL=%s\nNEXT_PUBLIC_SERVER_URL=%s\nNEXTAUTH_URL=%s\n' "$gw_url" "$web_url" "$web_url" >> "$out"
+}
+
+# 프론트 이미지 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다). 빌드 값 해시를 빌드 인자로 — 프론트 Dockerfile 이 ARG 로 받으면 값이 바뀔 때 빌드 캐시를 쓰지 않는다
+build_web_image() {
+    local name="$1" build_env="$2" src="$2" hash
+    hash="$(sha256sum "$build_env" | cut -c1-16)"
+    command -v cygpath > /dev/null 2>&1 && src="$(cygpath -w "$build_env")"
+    build_image "$name" "$ROOT/frontend" --secret "id=dotenv,src=$src" --build-arg "DESKLESS_BUILD_ENV_HASH=$hash"
 }
 
 # 임시 폴더 — 끝나면 지운다(비밀값이 든 파일을 남기지 않는다). up 처럼 여러 묶음을 이어 돌려도 하나만 쓴다
@@ -430,27 +657,30 @@ app_default_replicas() {
     esac
 }
 
-# 백엔드 이미지 빌드 → 로컬 k3d 클러스터에 넣기. 태그 = deskless 에 받아 둔 backend/ 커밋
+# 백엔드 이미지 빌드 → 클러스터에 넣기(로컬 k3d import · 운영 서버는 k3s 안에 바로) — backend_images <태그> <앱…>(고른 앱만)
 backend_images() {
-    local tag="$1" app cluster images=()
-    [[ "${ENV[KUBE_CONTEXT]}" == k3d-* ]] || die "로컬 k3d 클러스터(KUBE_CONTEXT=k3d-…)가 아니면 레지스트리 이미지가 필요합니다 — 로드맵 Phase 8 운영 준비"
-    cluster="${ENV[KUBE_CONTEXT]#k3d-}"
-    for app in "${BACKEND_APPS[@]}"; do
-        if docker image inspect "deskless/$app:$tag" > /dev/null 2>&1; then
-            step "이미지 deskless/$app:$tag — 이미 있다(빌드 건너뜀)"
+    local tag="$1" app images=() name
+    shift
+    require_image_target
+    for app in "$@"; do
+        name="deskless/$app:$tag"
+        if image_exists "$name"; then
+            step "이미지 $name — 이미 있다(빌드 건너뜀)"
         else
-            step "이미지 deskless/$app:$tag 빌드"
-            docker build --build-arg "APP=$app" -t "deskless/$app:$tag" "$ROOT/backend"
+            step "이미지 $name 빌드"
+            build_image "$name" "$ROOT/backend" --build-arg "APP=$app"
         fi
-        images+=("deskless/$app:$tag")
+        images+=("$name")
     done
-    step "로컬 클러스터 $cluster 에 이미지 넣기"
-    k3d image import "${images[@]}" -c "$cluster"
+    load_images "${images[@]}"
 }
 
-# 백엔드 설치 · 갱신 — 마이그레이션(Helm hook)이 앱보다 먼저 돈다
+# 백엔드 설치 · 갱신 — 마이그레이션(Helm hook)이 앱보다 먼저 돈다. backend_up [앱…] — 고른 앱만 새 이미지, 나머지는 지금 떠 있는 이미지 그대로(비우면 4개 전부)
 backend_up() {
     require KUBE_CONTEXT
+    local targets=("$@")
+    [ "${#targets[@]}" -gt 0 ] || targets=("${BACKEND_APPS[@]}")
+    is_registry && require_registry pull
     # 브라우저가 닿는 공개 주소 — backend/.env 의 같은 키(PC 실행용)는 쓰지 않는다
     local gw_url web_url
     gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
@@ -490,11 +720,26 @@ backend_up() {
     done
     percent="$(env_get AUTOSCALE_CPU_PERCENT 70)"
     require_int AUTOSCALE_CPU_PERCENT "$percent"
-    need_tools git docker kubectl helm k3d
+    need_tools git kubectl helm $(build_tools)
     [ -f "$ROOT/backend/Dockerfile" ] || die "backend/ 가 비어 있습니다 — git submodule update --init"
-    local tag
-    tag="$(git -C "$ROOT/backend" rev-parse --short HEAD)"
+    local tag image_pfx image
+    tag="$(source_tag backend)"
+    image_pfx="$(image_prefix)"
     make_tmp
+    # 고르지 않은 앱 — 지금 떠 있는 태그 그대로(아직 없으면 같이 올린다). 이미지 방식(IMAGE_SOURCE)을 바꾼 뒤에는 그대로 둘 이미지가 없다
+    declare -A keep=()
+    for app in "${BACKEND_APPS[@]}"; do
+        in_list "$app" "${targets[@]}" && continue
+        image="$(deployed_image "$app")"
+        if [ -z "$image" ]; then
+            echo "  $app — 아직 없다 · 같이 올린다"
+            targets+=("$app")
+        elif [[ "$image" == "$image_pfx$app:"* ]]; then
+            keep[$app]="${image##*:}"
+        else
+            die "$app 는 지금 $image — 이미지 방식(IMAGE_SOURCE=$(image_source))이 바뀌었으니 처음 한 번은 앱 4개를 같이 올립니다: ./deskless.sh up backend"
+        fi
+    done
 
     # Secret — 앱이 쓰는 비밀값(어느 앱이 무엇을 받는지는 차트 values.yaml 의 secretKeys)
     local secret_file="$WORK_DIR/backend.env" config_file="$WORK_DIR/backend-config.env" values_file="$WORK_DIR/values.yaml"
@@ -517,6 +762,7 @@ backend_up() {
     # values — 이미지 태그 · 설정 해시(설정 · 비밀값이 바뀌면 파드가 새 값으로 다시 뜬다) · 대수 · 자동 증설 기준 · 게이트웨이 주소
     {
         printf 'imageTag: %s\n' "$(yaml_str "$tag")"
+        image_values
         printf 'configHash: %s\n' "$(yaml_str "$(cat "$secret_file" "$config_file" | sha256sum | cut -c1-16)")"
         printf 'dataDir: %s\n' "$(yaml_str "$(env_get INFRA_DATA_DIR /var/lib/deskless)")"
         printf 'autoscale:\n  cpuPercent: %s\n' "$percent"
@@ -526,19 +772,26 @@ backend_up() {
         printf 'apps:\n'
         for app in "${BACKEND_APPS[@]}"; do
             printf '  %s:\n    replicasMin: %s\n    replicasMax: %s\n' "$app" "${rmin[$app]}" "${rmax[$app]}"
+            [ -n "${keep[$app]:-}" ] && printf '    imageTag: %s\n' "$(yaml_str "${keep[$app]}")"
         done
     } > "$values_file"
 
-    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 이미지 태그: $tag(backend/ 커밋)"
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 이미지: $(image_source) · 태그 $tag(backend/ 커밋)"
     for app in "${BACKEND_APPS[@]}"; do
-        echo "  $app ${rmin[$app]} ~ ${rmax[$app]}대$([ "${rmin[$app]}" -lt "${rmax[$app]}" ] && echo " — 자동 증설(CPU 코어 1개의 $percent%)")"
+        echo "  $app ${rmin[$app]} ~ ${rmax[$app]}대$([ "${rmin[$app]}" -lt "${rmax[$app]}" ] && echo " — 자동 증설(CPU 코어 1개의 $percent%)") · $image_pfx$app:${keep[$app]:-$tag}$([ -n "${keep[$app]:-}" ] && echo ' (그대로)')"
     done
-    backend_images "$tag"
+    [ -n "${keep[user-service]:-}" ] && echo "  (마이그레이션은 user-service 이미지로 돈다 — 새 마이그레이션이 있으면 user-service 도 고른다)"
+    if is_registry; then
+        echo "  (GHCR 에 이 태그가 없으면 새 파드가 받기에서 멈추고 옛 파드는 그대로 — 기다리는 시간 뒤 실패한다. 먼저 ./deskless.sh push)"
+    else
+        backend_images "$tag" "${targets[@]}"
+    fi
     ensure_namespace
     step "Secret $BACKEND_SECRET · ConfigMap $BACKEND_CONFIG"
     apply_env_object secret "$BACKEND_SECRET" "$secret_file"
     apply_env_object configmap "$BACKEND_CONFIG" "$config_file"
-    step "Helm $BACKEND_RELEASE — 마이그레이션 먼저, 앱이 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    is_registry && ensure_pull_secret
+    step "Helm $BACKEND_RELEASE — 마이그레이션 먼저, 새 이미지 앱은 한 대씩 바꾸며 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
     helm_ctx upgrade --install "$BACKEND_RELEASE" "$ROOT/charts/backend" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
     echo "✓ 백엔드 설치 — 상태: ./deskless.sh backend status"
     echo "  게이트웨이 $gw_url · Swagger $gw_url/${BENV[SWAGGER_PATH]:-swagger}"
@@ -551,7 +804,8 @@ backend_status() {
     echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE"
     helm_ctx status "$BACKEND_RELEASE" -n "$NAMESPACE" 2> /dev/null | sed -n '1,4p' || echo "(설치 안 됨 — ./deskless.sh backend up)"
     echo
-    kube -n "$NAMESPACE" get deployment,pod,service -l app.kubernetes.io/part-of=deskless-backend
+    kube -n "$NAMESPACE" get deployment -o wide -l app.kubernetes.io/part-of=deskless-backend
+    kube -n "$NAMESPACE" get pod,service -l app.kubernetes.io/part-of=deskless-backend
     echo
     echo "자동 증설(HPA) — 지금 사용률 / 목표 · 최소 ~ 최대 · 지금 대수:"
     kube -n "$NAMESPACE" get hpa -l app.kubernetes.io/part-of=deskless-backend 2> /dev/null || echo "(자동 증설 앱 없음)"
@@ -580,9 +834,10 @@ backend_down() {
 
 # ── web(프론트) ─────────────────────────────
 
-# 프론트 설치 · 갱신 — 빌드 값(공개 주소를 박는다)으로 이미지 → 로컬 클러스터에 넣기 → Secret · ConfigMap → Helm
+# 프론트 설치 · 갱신 — 이미지(build: 빌드 값으로 빌드 → 클러스터에 넣기, registry: GHCR) → Secret · ConfigMap(공개 값 포함) → Helm
 web_up() {
     require KUBE_CONTEXT
+    is_registry && require_registry pull
     local gw_url web_url k
     gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
     web_url="$(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT)"
@@ -599,24 +854,28 @@ web_up() {
     [ "$min" -le "$max" ] || die "WEB_REPLICAS_MIN($min)이 WEB_REPLICAS_MAX($max)보다 큽니다"
     percent="$(env_get AUTOSCALE_CPU_PERCENT 70)"
     require_int AUTOSCALE_CPU_PERCENT "$percent"
-    need_tools git docker kubectl helm k3d
+    need_tools git kubectl helm $(build_tools)
     [ -f "$ROOT/frontend/Dockerfile" ] || die "frontend/ 가 비어 있습니다 — git submodule update --init"
-    [[ "${ENV[KUBE_CONTEXT]}" == k3d-* ]] || die "로컬 k3d 클러스터(KUBE_CONTEXT=k3d-…)가 아니면 레지스트리 이미지가 필요합니다 — 로드맵 Phase 8 운영 준비"
+    is_registry || require_image_target
     make_tmp
 
-    # 빌드 값 — 프론트 값 파일 그대로(따옴표 · 주석 유지) + 공개 주소 3개를 .env 의 값으로 바꾼다(NEXT_PUBLIC_* 는 빌드 때 박힌다)
-    local build_env="$WORK_DIR/web-build.env" secret_file="$WORK_DIR/web.env" config_file="$WORK_DIR/web-config.env" values_file="$WORK_DIR/web-values.yaml" build_src tag
-    grep -vE '^[[:space:]]*(NEXT_PUBLIC_API_URL|NEXT_PUBLIC_SERVER_URL|NEXTAUTH_URL)[[:space:]]*=' "$FENV_FILE" > "$build_env" || true
-    printf '\n# deskless 공개 주소(.env)\nNEXT_PUBLIC_API_URL=%s\nNEXT_PUBLIC_SERVER_URL=%s\nNEXTAUTH_URL=%s\n' "$gw_url" "$web_url" "$web_url" >> "$build_env"
-    # 태그 = frontend/ 커밋 + 빌드 값 해시 — 빌드 값(공개 주소 · NEXT_PUBLIC_*)이 바뀌면 다시 빌드한다
-    tag="$(git -C "$ROOT/frontend" rev-parse --short HEAD)-$(sha256sum "$build_env" | cut -c1-8)"
+    local build_env="$WORK_DIR/web-build.env" secret_file="$WORK_DIR/web.env" config_file="$WORK_DIR/web-config.env" values_file="$WORK_DIR/web-values.yaml" tag prefix
+    prefix="$(image_prefix)"
+    if is_registry; then
+        # 태그 = frontend/ 커밋 — 올린 쪽(push)과 같은 태그
+        tag="$(source_tag web)"
+    else
+        # 빌드 값 — 공개 주소는 .env. 태그 = frontend/ 커밋 + 빌드 값 해시 — 빌드 값이 바뀌면 다시 빌드한다
+        web_build_env "$build_env" "$gw_url" "$web_url"
+        tag="$(source_tag web)-$(sha256sum "$build_env" | cut -c1-8)"
+    fi
     # Secret — 서버만 쓰는 비밀값
     {
         for k in "${WEB_SECRET_REQUIRED[@]}" "${WEB_SECRET_OPTIONAL[@]}"; do
             printf '%s=%s\n' "$k" "${FENV[$k]:-}"
         done
     } > "$secret_file"
-    # ConfigMap — 실행 값(빌드 전용 · 비밀값 · 차트가 정하는 키 빼고) + 공개 주소
+    # ConfigMap — 실행 값(빌드 전용 · 비밀값 · 차트가 정하는 키 빼고 — 공개 값 NEXT_PUBLIC_* 포함) + 공개 주소(.env)
     {
         while IFS= read -r k; do
             [ -n "$k" ] || continue
@@ -624,10 +883,11 @@ web_up() {
             web_build_only_key "$k" && continue
             printf '%s=%s\n' "$k" "${FENV[$k]}"
         done < <(printf '%s\n' "${!FENV[@]}" | LC_ALL=C sort)
-        printf 'NEXTAUTH_URL=%s\n' "$web_url"
+        printf 'NEXT_PUBLIC_API_URL=%s\nNEXT_PUBLIC_SERVER_URL=%s\nNEXTAUTH_URL=%s\n' "$gw_url" "$web_url" "$web_url"
     } > "$config_file"
     {
         printf 'imageTag: %s\n' "$(yaml_str "$tag")"
+        image_values
         printf 'configHash: %s\n' "$(yaml_str "$(cat "$secret_file" "$config_file" | sha256sum | cut -c1-16)")"
         printf 'autoscale:\n  cpuPercent: %s\n' "$percent"
         printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
@@ -635,23 +895,25 @@ web_up() {
             "$min" "$max" "$(truthy "$(env_get WEB_EXPOSE 0)")" "$(yaml_str "$(env_get WEB_HOST)")" "$(yaml_str "$(env_get INGRESS_CLASS)")" "$(yaml_str "$(env_get WEB_TLS_SECRET)")"
     } > "$values_file"
 
-    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 이미지 태그: $tag(frontend/ 커밋-빌드 값) · 값 파일: ${FENV_FILE#"$ROOT"/}"
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 이미지: $prefix""web:$tag($(image_source)) · 값 파일: ${FENV_FILE#"$ROOT"/}"
     echo "  web $min ~ ${max}대$([ "$min" -lt "$max" ] && echo " — 자동 증설(CPU 코어 1개의 $percent%)")"
-    if docker image inspect "deskless/web:$tag" > /dev/null 2>&1; then
-        step "이미지 deskless/web:$tag — 이미 있다(빌드 건너뜀)"
+    if is_registry; then
+        echo "  (GHCR 에 이 태그가 없으면 새 파드가 받기에서 멈추고 옛 파드는 그대로 — 기다리는 시간 뒤 실패한다. 먼저 ./deskless.sh push web)"
     else
-        step "이미지 deskless/web:$tag 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다)"
-        build_src="$build_env"
-        command -v cygpath > /dev/null 2>&1 && build_src="$(cygpath -w "$build_env")"
-        DOCKER_BUILDKIT=1 docker build --secret "id=dotenv,src=$build_src" -t "deskless/web:$tag" "$ROOT/frontend"
+        if image_exists "deskless/web:$tag"; then
+            step "이미지 deskless/web:$tag — 이미 있다(빌드 건너뜀)"
+        else
+            step "이미지 deskless/web:$tag 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다)"
+            build_web_image "deskless/web:$tag" "$build_env"
+        fi
+        load_images "deskless/web:$tag"
     fi
-    step "로컬 클러스터 ${ENV[KUBE_CONTEXT]#k3d-} 에 이미지 넣기"
-    k3d image import "deskless/web:$tag" -c "${ENV[KUBE_CONTEXT]#k3d-}"
     ensure_namespace
     step "Secret $WEB_SECRET · ConfigMap $WEB_CONFIG"
     apply_env_object secret "$WEB_SECRET" "$secret_file"
     apply_env_object configmap "$WEB_CONFIG" "$config_file"
-    step "Helm $WEB_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    is_registry && ensure_pull_secret
+    step "Helm $WEB_RELEASE — 새 이미지면 한 대씩 바꾸며 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
     helm_ctx upgrade --install "$WEB_RELEASE" "$ROOT/charts/web" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
     echo "✓ 프론트 설치 — 상태: ./deskless.sh web status"
     echo "  웹 $web_url"
@@ -664,7 +926,8 @@ web_status() {
     echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE"
     helm_ctx status "$WEB_RELEASE" -n "$NAMESPACE" 2> /dev/null | sed -n '1,4p' || echo "(설치 안 됨 — ./deskless.sh web up)"
     echo
-    kube -n "$NAMESPACE" get deployment,pod,service -l app.kubernetes.io/part-of=deskless-web
+    kube -n "$NAMESPACE" get deployment -o wide -l app.kubernetes.io/part-of=deskless-web
+    kube -n "$NAMESPACE" get pod,service -l app.kubernetes.io/part-of=deskless-web
     echo
     echo "자동 증설(HPA) — 지금 사용률 / 목표 · 최소 ~ 최대 · 지금 대수:"
     kube -n "$NAMESPACE" get hpa -l app.kubernetes.io/part-of=deskless-web 2> /dev/null || echo "(자동 증설 없음)"
@@ -677,6 +940,80 @@ web_down() {
     step "Helm $WEB_RELEASE 지우기"
     helm_ctx uninstall "$WEB_RELEASE" -n "$NAMESPACE" --wait
     echo "✓ 프론트를 지웠다 — Secret $WEB_SECRET · ConfigMap $WEB_CONFIG 은 남는다"
+}
+
+# ── 이미지 올리기 · 다시 띄우기 ─────────────
+
+# 이미지를 GHCR 에 올리기 — 클러스터에는 닿지 않는다. 태그 = 커밋(받는 쪽 up 이 같은 deskless 커밋으로 같은 태그를 찾는다)
+# 보통은 PC 에서 올리고 서버에서 받지만, 서버에서 올리고(./deskless-server.sh push) PC 에서 받아도(IMAGE_SOURCE=registry) 된다
+push_images() {
+    select_services "$@"
+    require_registry push
+    need_tools git "$(engine_tool)"
+    is_server || ensure_docker
+    make_tmp
+    local prefix svc dir tag name names=() gw_url web_url build_env="$WORK_DIR/web-build.env" host
+    prefix="$(image_prefix registry)"
+    host="$(registry_host)"
+    if in_list web "${SELECTED[@]}"; then
+        # 프론트 빌드 값 — 공개 주소는 .env(프론트가 실행 때 읽게 되기 전까지는 올린 쪽의 주소가 이미지에 박힌다)
+        load_frontend_env
+        gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
+        web_url="$(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT)"
+        web_build_env "$build_env" "$gw_url" "$web_url"
+    fi
+    step "GHCR 로그인 $host(${ENV[GHCR_USER]}) — 올리기 키는 표준 입력으로만 넘긴다"
+    if is_server; then
+        printf '%s' "${ENV[GHCR_PUSH_TOKEN]}" | nerdctl_k3s login "$host" -u "${ENV[GHCR_USER]}" --password-stdin
+    else
+        printf '%s' "${ENV[GHCR_PUSH_TOKEN]}" | docker login "$host" -u "${ENV[GHCR_USER]}" --password-stdin
+    fi
+    for svc in "${SELECTED[@]}"; do
+        dir=backend
+        [ "$svc" = web ] && dir=frontend
+        [ -f "$ROOT/$dir/Dockerfile" ] || die "$dir/ 가 비어 있습니다 — git submodule update --init"
+        tag="$(source_tag "$svc")"
+        name="$prefix$svc:$tag"
+        [ -z "$(git -C "$ROOT/$dir" status --porcelain 2> /dev/null)" ] || echo "  ⚠ $dir/ 에 커밋하지 않은 변경이 있다 — 이미지에는 들어가지만 태그($tag)는 커밋 그대로다"
+        git -C "$ROOT" diff --quiet --ignore-submodules=dirty HEAD -- "$dir" || echo "  ⚠ deskless 에 아직 커밋하지 않은 $dir/ 커밋($tag) — 받는 쪽은 deskless 커밋의 태그를 찾는다(커밋 · git push 뒤 받는 쪽에서 git pull --recurse-submodules)"
+        if image_exists "$name"; then
+            step "이미지 $name — 이미 있다(빌드 건너뜀)"
+        elif [ "$svc" = web ]; then
+            step "이미지 $name 빌드"
+            build_web_image "$name" "$build_env"
+        else
+            step "이미지 $name 빌드"
+            build_image "$name" "$ROOT/backend" --build-arg "APP=$svc"
+        fi
+        step "올리기 $name"
+        if is_server; then
+            nerdctl_k3s push "$name"
+        else
+            docker push "$name"
+        fi
+        names+=("$name")
+    done
+    echo "✓ GHCR 에 올렸다"
+    printf '  %s\n' "${names[@]}"
+    echo "  받기 — deskless 커밋을 git push 한 뒤, 받는 쪽(.env 의 IMAGE_SOURCE=registry)에서:"
+    echo "    git pull --recurse-submodules && ./deskless-server.sh up ${SELECTED[*]}   (PC 는 .\deskless up ${SELECTED[*]})"
+}
+
+# 파드를 한 대씩 다시 띄우기 — 새 파드가 준비되면 옛 파드를 내린다. 같은 태그를 다시 올렸을 때(registry 는 이미지를 다시 받는다) · 설정을 손으로 바꿨을 때
+restart_services() {
+    select_services "$@"
+    require KUBE_CONTEXT
+    need_tools kubectl
+    local svc minutes
+    minutes="$(wait_minutes)"
+    for svc in "${SELECTED[@]}"; do
+        step "다시 띄우기 $svc — 한 대씩"
+        kube -n "$NAMESPACE" rollout restart "deployment/$svc"
+    done
+    for svc in "${SELECTED[@]}"; do
+        kube -n "$NAMESPACE" rollout status "deployment/$svc" --timeout="${minutes}m"
+    done
+    echo "✓ 다시 띄웠다 — ${SELECTED[*]}"
 }
 
 # ── monitoring ──────────────────────────────
@@ -757,6 +1094,73 @@ monitoring_down() {
     echo "✓ 모니터링을 지웠다 — 지표 · 대시보드 데이터(노드의 $(env_get INFRA_DATA_DIR /var/lib/deskless))와 Secret $MONITORING_SECRET 은 남는다"
 }
 
+# ── dashboard(쿠버네티스 대시보드) ───────────
+
+# 로그인 계정 한 줄(nginx Basic 인증 — <계정>:<apr1 해시>). 소금은 계정 · 비밀번호에서 만든다 — 값이 같으면 줄도 같아 파드가 괜히 다시 뜨지 않는다
+dashboard_htpasswd() {
+    local user="$1" password="$2" salt
+    salt="$(printf '%s:%s' "$user" "$password" | sha256sum | cut -c1-8)"
+    printf '%s:%s' "$user" "$(printf '%s' "$password" | openssl passwd -apr1 -salt "$salt" -stdin)"
+}
+
+# 대시보드 설치 · 갱신 — 로그인 계정(Secret) → Helm
+dashboard_up() {
+    require KUBE_CONTEXT DASHBOARD_USER DASHBOARD_PASSWORD
+    [[ "${ENV[DASHBOARD_USER]}" != *:* ]] || die ".env 의 DASHBOARD_USER 에는 : 를 쓸 수 없습니다"
+    local expose line
+    expose="$(truthy "$(env_get DASHBOARD_EXPOSE 0)")"
+    need_tools kubectl helm openssl sha256sum
+    make_tmp
+    local secret_file="$WORK_DIR/dashboard.env" values_file="$WORK_DIR/dashboard-values.yaml"
+    line="$(dashboard_htpasswd "${ENV[DASHBOARD_USER]}" "${ENV[DASHBOARD_PASSWORD]}")"
+    [[ "$line" == "${ENV[DASHBOARD_USER]}:\$apr1\$"* ]] || die "로그인 계정을 만들지 못했습니다 — openssl passwd -apr1 을 확인하세요"
+    printf 'HTPASSWD=%s\n' "$line" > "$secret_file"
+    {
+        printf 'expose: %s\n' "$expose"
+        printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
+        printf 'configHash: %s\n' "$(yaml_str "$(sha256sum "$secret_file" | cut -c1-16)")"
+    } > "$values_file"
+
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 밖으로 열기: $expose · 로그인 ${ENV[DASHBOARD_USER]}"
+    ensure_namespace
+    step "Secret $DASHBOARD_SECRET (로그인 계정 — 비밀번호는 해시로만)"
+    apply_env_object secret "$DASHBOARD_SECRET" "$secret_file"
+    step "Helm $DASHBOARD_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    helm_ctx upgrade --install "$DASHBOARD_RELEASE" "$ROOT/charts/dashboard" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
+    echo "✓ 대시보드 설치 — 상태: ./deskless.sh dashboard status"
+    dashboard_addresses "$expose"
+}
+
+# 대시보드 주소 — 로컬로 열었으면 PC 주소, 아니면 port-forward
+dashboard_addresses() {
+    if [ "$1" = true ] && is_local; then
+        echo "  쿠버네티스 대시보드 http://localhost:$(env_get LOCAL_DASHBOARD_PORT) (로그인 $(env_get DASHBOARD_USER) / .env 의 DASHBOARD_PASSWORD)"
+    else
+        echo "  쿠버네티스 대시보드: kubectl --context ${ENV[KUBE_CONTEXT]} -n $NAMESPACE port-forward svc/dashboard $(env_get LOCAL_DASHBOARD_PORT 14466):4466 → http://localhost:$(env_get LOCAL_DASHBOARD_PORT 14466) (로그인 $(env_get DASHBOARD_USER) / .env 의 DASHBOARD_PASSWORD)"
+    fi
+}
+
+# 대시보드 상태
+dashboard_status() {
+    require KUBE_CONTEXT
+    need_tools kubectl helm
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE"
+    helm_ctx status "$DASHBOARD_RELEASE" -n "$NAMESPACE" 2> /dev/null | sed -n '1,4p' || echo "(설치 안 됨 — ./deskless.sh dashboard up)"
+    echo
+    kube -n "$NAMESPACE" get deployment,pod,service -l app.kubernetes.io/part-of=deskless-dashboard
+    echo
+    dashboard_addresses "$(truthy "$(env_get DASHBOARD_EXPOSE 0)")"
+}
+
+# 대시보드 지우기 — Secret 은 남긴다
+dashboard_down() {
+    require KUBE_CONTEXT
+    need_tools helm
+    step "Helm $DASHBOARD_RELEASE 지우기"
+    helm_ctx uninstall "$DASHBOARD_RELEASE" -n "$NAMESPACE" --wait
+    echo "✓ 대시보드를 지웠다 — Secret $DASHBOARD_SECRET 은 남는다"
+}
+
 # ── 전부(원클릭) ────────────────────────────
 
 # 로컬 k3d 클러스터인지(KUBE_CONTEXT=k3d-<이름>)
@@ -792,12 +1196,16 @@ url_port() {
 }
 
 # 예시 파일에는 있는데 값 파일에 없는 키(공백으로 이어서) — 예시에 새로 생긴 키를 값 파일에 옮겨 적지 않으면 기본값으로 조용히 돈다
+#   missing_example_keys <예시 파일> <값 배열 이름> [빼는 키…](비어도 되는 키)
 missing_example_keys() {
     local example="$1" k out=()
     local -n have="$2"
+    shift 2
     [ -f "$example" ] || return 0
     while IFS= read -r k; do
-        [ -n "$k" ] && [ -z "${have[$k]+x}" ] && out+=("$k")
+        [ -n "$k" ] && [ -z "${have[$k]+x}" ] || continue
+        in_list "$k" "$@" && continue
+        out+=("$k")
     done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$example" | tr -d '\r')
     printf '%s' "${out[*]}"
 }
@@ -805,13 +1213,20 @@ missing_example_keys() {
 # 원클릭 전 확인 — 필요한 파일 · 값 · 도구를 한꺼번에 보고, 하나라도 빠지면 클러스터에 닿기 전에 멈춘다
 # (묶음이 늘면 그 묶음의 값 파일을 여기 더한다 — 프론트는 Phase 4)
 preflight() {
-    local problems=() k t tools=(git docker kubectl helm)
+    local problems=() k t tools=(git kubectl helm openssl)
     step "확인 — 값 파일 · 필수 값 · 도구"
     if [ -f "$ENV_FILE" ]; then
         read_env_file "$ENV_FILE" ENV
-        for k in KUBE_CONTEXT "${INFRA_SECRET_KEYS[@]}" GRAFANA_ADMIN_PASSWORD; do
+        for k in KUBE_CONTEXT "${INFRA_SECRET_KEYS[@]}" GRAFANA_ADMIN_PASSWORD DASHBOARD_USER DASHBOARD_PASSWORD; do
             [ -n "${ENV[$k]:-}" ] || problems+=(".env 에 $k 가 비어 있다(.env.example 참고)")
         done
+        if ! image_source_ok; then
+            problems+=(".env 의 IMAGE_SOURCE 는 build 또는 registry 여야 한다(지금: ${ENV[IMAGE_SOURCE]})")
+        elif is_registry; then
+            for k in IMAGE_REGISTRY GHCR_USER GHCR_PULL_TOKEN; do
+                [ -n "${ENV[$k]:-}" ] || problems+=(".env 에 $k 가 비어 있다 — IMAGE_SOURCE=registry 는 GHCR 에서 받는다(.env.example 의 이미지 절)")
+            done
+        fi
     else
         problems+=(".env 가 없다 — cp .env.example .env (로컬은 그대로 쓴다)")
     fi
@@ -844,7 +1259,7 @@ preflight() {
     # 예시에 새로 생긴 키 — 값 파일에 옮겨 적는다(값이 기본이면 예시 그대로)
     local missing
     if [ -f "$ENV_FILE" ]; then
-        missing="$(missing_example_keys "$ROOT/.env.example" ENV)"
+        missing="$(missing_example_keys "$ROOT/.env.example" ENV "${OPTIONAL_ENV_KEYS[@]}")"
         [ -z "$missing" ] || problems+=(".env 에 없는 키(.env.example 에 새로 생김): $missing — .env.example 에서 옮겨 적는다")
     fi
     if [ -n "$BENV_LOADED" ]; then
@@ -886,7 +1301,12 @@ preflight() {
         done
     fi
     [[ "${ENV[WAIT_TIMEOUT_MINUTES]:-}" =~ ^[1-9][0-9]*$ ]] || problems+=(".env 의 WAIT_TIMEOUT_MINUTES 는 1 이상의 정수여야 한다(지금: ${ENV[WAIT_TIMEOUT_MINUTES]:-빈 값})")
-    is_local && tools+=(k3d)
+    # 이미지 도구 — build 만(registry 는 클러스터가 받는다), 로컬 클러스터는 늘 docker · k3d
+    if is_local; then
+        tools+=(docker k3d)
+    elif ! is_registry; then
+        tools+=("$(engine_tool)")
+    fi
     for t in "${tools[@]}"; do
         command -v "$t" > /dev/null 2>&1 || add_windows_tool_paths
         command -v "$t" > /dev/null 2>&1 || problems+=("$t 가 없다 — README '설치' — Windows 는 .\deskless setup")
@@ -928,7 +1348,7 @@ ensure_docker() {
 local_cluster() {
     local cluster="${ENV[KUBE_CONTEXT]#k3d-}" data gw web
     local pg="${ENV[LOCAL_POSTGRES_PORT]:-}" mq="${ENV[LOCAL_RABBITMQ_PORT]:-}" mqa="${ENV[LOCAL_RABBITMQ_ADMIN_PORT]:-}" rd="${ENV[LOCAL_REDIS_PORT]:-}"
-    local gf="${ENV[LOCAL_GRAFANA_PORT]:-}" pr="${ENV[LOCAL_PROMETHEUS_PORT]:-}" api="${ENV[LOCAL_API_PORT]:-}"
+    local gf="${ENV[LOCAL_GRAFANA_PORT]:-}" pr="${ENV[LOCAL_PROMETHEUS_PORT]:-}" db="${ENV[LOCAL_DASHBOARD_PORT]:-}" api="${ENV[LOCAL_API_PORT]:-}"
     ensure_docker
     gw="${ENV[LOCAL_GATEWAY_PORT]:-}"
     web="${ENV[LOCAL_WEB_PORT]:-}"
@@ -938,7 +1358,7 @@ local_cluster() {
         # 입구는 만들 때만 정해진다 — 뒤에 더한 입구(프론트 · 모니터링)가 없으면 알린다(그 화면만 PC 에서 열리지 않는다)
         local mapped missing=() pair
         mapped="$(docker port "k3d-$cluster-serverlb" 2> /dev/null || true)"
-        for pair in "$pg:5432" "$mq:5672" "$mqa:15672" "$rd:6379" "$gw:3000" "$web:5000" "$gf:3001" "$pr:9090"; do
+        for pair in "$pg:5432" "$mq:5672" "$mqa:15672" "$rd:6379" "$gw:3000" "$web:5000" "$gf:3001" "$pr:9090" "$db:4466"; do
             grep -q "^${pair#*:}/tcp -> 127.0.0.1:${pair%%:*}\$" <<< "$mapped" || missing+=("${pair%%:*}")
         done
         if [ "${#missing[@]}" -gt 0 ]; then
@@ -948,7 +1368,7 @@ local_cluster() {
         data="$(env_get INFRA_DATA_DIR /var/lib/deskless)"
         # 만들기 전에 PC 포트가 비어 있는지 — 옛 compose 컨테이너 · PC 에 깐 DB 등이 잡고 있으면 만들다 실패한다
         local busy=() p
-        for p in "$pg" "$mq" "$mqa" "$rd" "$gw" "$web" "$gf" "$pr" "$api"; do
+        for p in "$pg" "$mq" "$mqa" "$rd" "$gw" "$web" "$gf" "$pr" "$db" "$api"; do
             port_in_use "$p" && busy+=("$p")
         done
         [ "${#busy[@]}" -eq 0 ] || die "PC 포트 ${busy[*]} 를 다른 프로그램이 쓰고 있다 — 그 프로그램을 끄거나 .env 의 LOCAL_*_PORT 를 바꾼 뒤 다시 실행하세요(클러스터는 건드리지 않았다)"
@@ -959,13 +1379,14 @@ local_cluster() {
         for a in "${k3s_args[@]}"; do
             extra+=(--k3s-arg "$a")
         done
-        step "로컬 클러스터 $cluster 만들기 — PC 127.0.0.1 에 인프라 $pg · $mq · $mqa · $rd, 게이트웨이 $gw, 웹 $web, Grafana $gf, Prometheus $pr, 쿠버네티스 API $api, 데이터 볼륨 ${ENV[LOCAL_DATA_VOLUME]}"
+        step "로컬 클러스터 $cluster 만들기 — PC 127.0.0.1 에 인프라 $pg · $mq · $mqa · $rd, 게이트웨이 $gw, 웹 $web, Grafana $gf, Prometheus $pr, 대시보드 $db, 쿠버네티스 API $api, 데이터 볼륨 ${ENV[LOCAL_DATA_VOLUME]}"
         # 볼륨 자리(/var/…)를 Git Bash 가 Windows 경로로 바꾸지 않게
         MSYS_NO_PATHCONV=1 k3d cluster create "$cluster" \
             -p "127.0.0.1:$pg:5432@loadbalancer" -p "127.0.0.1:$mq:5672@loadbalancer" \
             -p "127.0.0.1:$mqa:15672@loadbalancer" -p "127.0.0.1:$rd:6379@loadbalancer" \
             -p "127.0.0.1:$gw:3000@loadbalancer" -p "127.0.0.1:$web:5000@loadbalancer" \
             -p "127.0.0.1:$gf:3001@loadbalancer" -p "127.0.0.1:$pr:9090@loadbalancer" \
+            -p "127.0.0.1:$db:4466@loadbalancer" \
             -v "${ENV[LOCAL_DATA_VOLUME]}:$data@server:0" \
             --api-port "127.0.0.1:$api" \
             "${extra[@]}"
@@ -975,23 +1396,52 @@ local_cluster() {
 }
 
 # 전부 설치 · 갱신(원클릭) — 확인 → (로컬이면) Docker · 클러스터 → 인프라 → 백엔드 → 프론트 → 모니터링. 묶음이 늘면 여기와 preflight 에 더한다
+# all_up <서비스…> — 고른 서비스만 갱신(인프라 · 모니터링 · 대시보드 · 고르지 않은 앱은 그대로)
 all_up() {
+    local partial='' apps=() a images
+    [ "$#" -gt 0 ] && partial=1
+    select_services "$@"
     preflight
-    echo "할 일 — 대상 클러스터 ${ENV[KUBE_CONTEXT]}"
+    if is_registry; then
+        images="GHCR 에서 받기($(image_prefix registry)<서비스>:<커밋> — 먼저 push)"
+    else
+        images="이 컴퓨터에서 빌드(처음엔 오래 걸린다)"
+    fi
+    echo "할 일 — 대상 클러스터 ${ENV[KUBE_CONTEXT]} · 이미지: $images"
     if is_local; then
         echo "  1. Docker 확인(꺼져 있으면 켠다) · 로컬 클러스터(없으면 만들고, 멈춰 있으면 켠다)"
     else
         echo "  1. (운영 클러스터 — 만들기 · 켜기는 하지 않는다)"
     fi
-    echo "  2. 인프라 — PostgreSQL · RabbitMQ · Redis"
-    echo "  3. 백엔드 — 이미지 4개 빌드(처음엔 오래 걸린다) · 마이그레이션 · 앱"
-    echo "  4. 프론트 — 이미지 빌드(공개 주소를 박는다) · 앱"
-    echo "  5. 모니터링 — Prometheus · Grafana · 수집기"
+    if [ -n "$partial" ]; then
+        echo "  2. 고른 서비스만 — ${SELECTED[*]}(새 이미지는 한 대씩 바꾼다 · 인프라 · 모니터링 · 대시보드 · 고르지 않은 앱은 그대로)"
+    else
+        echo "  2. 인프라 — PostgreSQL · RabbitMQ · Redis"
+        echo "  3. 백엔드 — 이미지 4개 · 마이그레이션 · 앱"
+        echo "  4. 프론트 — 이미지 · 앱"
+        echo "  5. 모니터링 — Prometheus · Grafana · 수집기"
+        echo "  6. 쿠버네티스 대시보드 — Headlamp 웹(로그인)"
+    fi
     echo
     if is_local; then
         local_cluster
     fi
     echo
+    if [ -n "$partial" ]; then
+        for a in "${BACKEND_APPS[@]}"; do
+            in_list "$a" "${SELECTED[@]}" && apps+=("$a")
+        done
+        if [ "${#apps[@]}" -gt 0 ]; then
+            backend_up "${apps[@]}"
+            echo
+        fi
+        if in_list web "${SELECTED[@]}"; then
+            web_up
+            echo
+        fi
+        echo "✓ 갱신했다 — ${SELECTED[*]} · 상태: ./deskless.sh status"
+        return 0
+    fi
     infra_up
     echo
     backend_up
@@ -1000,9 +1450,12 @@ all_up() {
     echo
     monitoring_up
     echo
+    dashboard_up
+    echo
     echo "✓ 전부 올렸다 — 상태: ./deskless.sh status"
     echo "  웹 $(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT) · 게이트웨이 $(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT) · Swagger $(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)/${BENV[SWAGGER_PATH]:-swagger}"
     monitoring_addresses "$(truthy "$(env_get MONITORING_EXPOSE 0)")"
+    dashboard_addresses "$(truthy "$(env_get DASHBOARD_EXPOSE 0)")"
     if [ "$(truthy "$(env_get INFRA_EXPOSE 0)")" = true ]; then
         echo "  $(infra_addresses)"
     fi
@@ -1017,6 +1470,8 @@ all_status() {
     web_status
     echo
     monitoring_status
+    echo
+    dashboard_status
 }
 
 # 묶음 · 동작 고르기
@@ -1024,7 +1479,20 @@ main() {
     local bundle="${1:-}" action="${2:-}"
     case "$bundle" in
         up)
-            all_up
+            shift
+            all_up "$@"
+            return 0
+            ;;
+        push)
+            shift
+            load_env
+            push_images "$@"
+            return 0
+            ;;
+        restart)
+            shift
+            load_env
+            restart_services "$@"
             return 0
             ;;
         status)
@@ -1032,7 +1500,7 @@ main() {
             all_status
             return 0
             ;;
-        infra | backend | web | monitoring) ;;
+        infra | backend | web | monitoring | dashboard) ;;
         '' | -h | --help | help)
             usage
             exit 0
@@ -1058,6 +1526,9 @@ main() {
         monitoring:up) monitoring_up ;;
         monitoring:status) monitoring_status ;;
         monitoring:down) monitoring_down ;;
+        dashboard:up) dashboard_up ;;
+        dashboard:status) dashboard_status ;;
+        dashboard:down) dashboard_down ;;
         *)
             usage
             die "모르는 동작: $bundle ${action:-(없음)}"

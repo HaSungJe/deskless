@@ -1,0 +1,140 @@
+# 쿠버네티스 대시보드 — Headlamp(웹) 1대 + 로그인 문지기(nginx) 를 한 파드에
+# - Headlamp 는 파드 안 127.0.0.1:4466 에만 연다 — 밖(Service · 다른 파드)에서는 문지기(8080)를 거쳐야만 닿는다
+# - 문지기가 Basic 인증(.env 의 DASHBOARD_USER · DASHBOARD_PASSWORD — Secret 의 HTPASSWD)을 통과한 요청에만 X-Forwarded-User 를 붙여 넘기고,
+#   Headlamp 는 그 헤더로 자기 로그인 화면을 건너뛰고(-proxy-auth) 파드의 ServiceAccount 권한(-unsafe-use-service-account-token)으로 클러스터를 본다
+# - 문지기는 클라이언트가 보낸 신원 헤더(X-Forwarded-User · Group · Email · Id-Token)를 덮어쓰거나 지운다 — 흉내 낸 헤더로 들어올 수 없게
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+---
+# 대시보드 권한 — values 의 clusterRole(기본 cluster-admin). 클러스터 범위라 이름에 네임스페이스를 붙인다
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "deskless-dashboard-%s" .Release.Namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.clusterRole }}
+subjects:
+  - kind: ServiceAccount
+    name: dashboard
+    namespace: {{ .Release.Namespace }}
+---
+# 문지기 설정 — files/default.conf(Basic 인증 · 신원 헤더 · WebSocket)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-auth
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+data:
+  default.conf: |-
+    {{- .Files.Get "files/default.conf" | nindent 4 }}
+---
+# 대시보드 — 클러스터 안 4466 → 문지기 8080, expose 면 노드 4466(로컬 k3d 는 PC 127.0.0.1:LOCAL_DASHBOARD_PORT)
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  type: {{ if .Values.expose }}LoadBalancer{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "dashboard.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 4466
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dashboard.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.labels" . | nindent 8 }}
+      annotations:
+        # 문지기 설정(checksum)이나 로그인 계정(config-hash — ./deskless.sh 가 넘긴다)이 바뀌면 다시 뜬다
+        checksum/config: {{ .Files.Get "files/default.conf" | sha256sum | trunc 16 }}
+        deskless/config-hash: {{ .Values.configHash | quote }}
+    spec:
+      serviceAccountName: dashboard
+      enableServiceLinks: false
+      containers:
+        - name: headlamp
+          image: {{ .Values.headlamp.image }}
+          args:
+            - -in-cluster
+            - -unsafe-use-service-account-token
+            - -proxy-auth=true
+            - -listen-addr=127.0.0.1
+            - -port=4466
+            - -plugins-dir=/headlamp/plugins
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            {{- toYaml .Values.headlamp.resources | nindent 12 }}
+        - name: auth
+          image: {{ .Values.auth.image }}
+          ports:
+            - name: http
+              containerPort: 8080
+          # Headlamp 는 127.0.0.1 에만 열려 kubelet 이 닿지 않는다 — 프로브는 문지기로(준비됨은 Headlamp 까지 지나간다)
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /-/healthz, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+          volumeMounts:
+            - name: auth-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: htpasswd
+              mountPath: /etc/nginx/auth
+              readOnly: true
+      volumes:
+        - name: auth-config
+          configMap:
+            name: dashboard-auth
+        - name: htpasswd
+          secret:
+            secretName: {{ .Values.secretName }}
+            items:
+              - key: HTPASSWD
+                path: htpasswd

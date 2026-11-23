@@ -14,7 +14,7 @@ affected_data: ["Secret deskless-web", "ConfigMap deskless-web-env", "Helm 릴�
 
 - **무엇을** 사용자가 `./deskless.sh web up`(또는 원클릭 `up`)을 실행하면 프론트 Next.js 서버가 쿠버네티스에 뜨고(로컬 http://localhost:15000), 최소 < 최대면 CPU 사용률로 대수가 자동으로 바뀐다.
 - **왜** 쿠버네티스 목적이 모든 앱의 자동 증설이다 — 프론트도 같은 방식(`WEB_REPLICAS_MIN` · `_MAX`, 사용자 2026-11-24).
-- **범위 밖** 프론트 코드 변경(서버 쪽 게이트웨이 주소는 요청서로), 네트워크 격리(Phase 6), 레지스트리 · 운영 Ingress 세부(Phase 8).
+- **범위 밖** 프론트 코드 변경(서버 쪽 게이트웨이 주소는 요청서로), 네트워크 격리(Phase 6), 운영 실행 파일 · GHCR 이미지(Phase 7).
 
 | 진입점 | 한 줄 요약 | 테스트 |
 |---|---|---|
