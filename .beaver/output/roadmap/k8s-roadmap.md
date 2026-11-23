@@ -10,8 +10,8 @@
 flowchart LR
   P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::done
   P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::done
-  P3 --> P4["Phase 4 · 프론트 (2)"]:::inprog
-  P3 --> P5["Phase 5 · 모니터링 (3)"]:::inprog
+  P3 --> P4["Phase 4 · 프론트 (2)"]:::done
+  P3 --> P5["Phase 5 · 모니터링 (3)"]:::done
   P4 -. 동시 가능 .- P5
   P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::todo
   P5 --> P6
@@ -26,22 +26,21 @@ flowchart LR
 - Phase 1 — 배포 구성 분리 · 유닛 3개 · 의존: — · 푼다: Phase 2 · 파일 집합: requests/, AGENTS.md, docs/ (+ backend · frontend 저장소) · done
 - Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
-- Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · in-progress
-- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · in-progress
+- Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · done
+- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · done
 - Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · todo
 - Phase 7 — 부하율 기준 자동 증설 · 유닛 1개 · 의존: Phase 5 · 푼다: — · 파일 집합: charts/monitoring/, charts/backend/ (HPA 기준) · todo
 - Phase 8 — 운영 준비 · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless.sh, README.md, .env.example · todo
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: Phase 4, Phase 5 진행 중 · Next up: Phase 4
+지금: 진행 중 없음 · Next up: Phase 6
 
 ## 지금 할 일
-Phase 4 프론트 · Phase 5 모니터링 — 만들어졌다, 확인하고 ok
-- 준비 — frontend/.env.production(frontend/.env.example 복사 + NEXTAUTH_SECRET) · .env 에 새 키(원클릭이 알려 준다) · 클러스터 한 번 다시 만들기(13001 · 19090 입구)
-- 원클릭 — .\deskless up → http://localhost:15000(웹) · http://localhost:13001(Grafana) · http://localhost:19090(Prometheus)
-- 프론트 요청서 — requests/frontend/2026-11-24-api-internal-url.md 를 프론트 세션에 반영시키면 클러스터 웹 로그인까지
-- ok → 커밋 · 푸시하고 Phase 6 네트워크 격리로
+Phase 6 네트워크 격리 — 서비스는 gateway 만, 인프라는 앱 · 수집기만 닿게(Phase 7 부하율 기준 증설은 선택 · 동시 가능)
+- 확인 — 웹 · Swagger · Grafana · Prometheus 가 원클릭 뒤 그대로 열리고, 프론트 요청서(API_INTERNAL_URL)가 반영되면 클러스터 웹 로그인까지
+- 정할 것 — 격리 범위(서비스 · 인프라 · 지표 포트) · Phase 7 을 같이 할지
+- ok → 커밋 · 푸시하고 Phase 8 운영 준비로
 
 ## Scope & Actors
 
@@ -111,8 +110,8 @@ Phase 4 프론트 · Phase 5 모니터링 — 만들어졌다, 확인하고 ok
 ### Phase 4 — 프론트 (web 을 클러스터에 올리기) · depends: Phase 3
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 17 | 프론트 이미지 | frontend `Dockerfile` — 빌드 secret `dotenv`(`NEXT_PUBLIC_*` 는 빌드 때 박힌다) | 빌드용 `.env.production` 을 어디서 받을지 | — | in-progress |
-| 18 | web Deployment · Service · Ingress 경로 · 자동 증설 | 포트 5000 · 지표 포트 · 프로브 · `WEB_REPLICAS_MIN` · `_MAX` | — | 17 | in-progress |
+| 17 | 프론트 이미지 | frontend `Dockerfile` — 빌드 secret `dotenv`(`NEXT_PUBLIC_*` 는 빌드 때 박힌다) | 빌드용 `.env.production` 을 어디서 받을지 | — | done(5fabd60) |
+| 18 | web Deployment · Service · Ingress 경로 · 자동 증설 | 포트 5000 · 지표 포트 · 프로브 · `WEB_REPLICAS_MIN` · `_MAX` | — | 17 | done(5fabd60) |
 
 **Expected commands**:
 
@@ -123,9 +122,9 @@ Phase 4 프론트 · Phase 5 모니터링 — 만들어졌다, 확인하고 ok
 ### Phase 5 — 모니터링 (옛 백엔드 모니터링을 클러스터로 옮기기) · depends: Phase 3
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 19 | Prometheus | 쿠버네티스에서 앱 파드 찾기 · 표시 이름 `display_name` · 기록 규칙(원본 backend `3125886:docker/prometheus/`) | 직접 만든 차트로 갈지, kube-prometheus-stack 으로 갈지 | — | in-progress |
-| 20 | Grafana | 서비스 부하(판정 표) · 인프라 대시보드 2개 · 한국어 화면 · 홈(원본 `3125886:docker/grafana/`) | — | 19 | in-progress |
-| 21 | 수집기 | PostgreSQL · Redis 수집기 · RabbitMQ 지표 플러그인(15692) | — | 19 | in-progress |
+| 19 | Prometheus | 쿠버네티스에서 앱 파드 찾기 · 표시 이름 `display_name` · 기록 규칙(원본 backend `3125886:docker/prometheus/`) | 직접 만든 차트로 갈지, kube-prometheus-stack 으로 갈지 | — | done(5fabd60) |
+| 20 | Grafana | 서비스 부하(판정 표) · 인프라 대시보드 2개 · 한국어 화면 · 홈(원본 `3125886:docker/grafana/`) | — | 19 | done(5fabd60) |
+| 21 | 수집기 | PostgreSQL · Redis 수집기 · RabbitMQ 지표 플러그인(15692) | — | 19 | done(5fabd60) |
 
 **Expected commands**:
 
@@ -168,8 +167,8 @@ Phase 4 프론트 · Phase 5 모니터링 — 만들어졌다, 확인하고 ok
 |------|---------|---------|
 | #24 | `./deskless.sh <묶음> up` (운영 `.env`) | 같은 명령으로 운영 설치 |
 
-**Progress**: 16/25 units done (3/8 phases)
-**Next up**: Phase 4 프론트 — 의존(Phase 3) 모두 완료
+**Progress**: 21/25 units done (5/8 phases)
+**Next up**: Phase 6 네트워크 격리 — 의존(Phase 4, Phase 5) 모두 완료
 
 ## Cross-Cutting Rules
 
