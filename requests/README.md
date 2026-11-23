@@ -11,8 +11,8 @@ deskless 가 하위 저장소(backend · frontend)에 보내는 수정 요청. �
 
 | 날짜 | 받는 곳 | 요청 | 상태 |
 |---|---|---|---|
-| 2026-11-23 | backend | [Docker 운영 구성 정리 · 모니터링 이전 · 헬스 체크 · 영향 전수 정리](backend/2026-11-23-k8s-cleanup.md) | 대기 |
-| 2026-11-23 | frontend | [Docker 실행 구성 정리 · 백엔드 모니터링 결합 끊기 · 헬스 체크 · 영향 전수 정리](frontend/2026-11-23-k8s-cleanup.md) | 대기 |
+| 2026-11-23 | backend | [Docker 운영 구성 정리 · 모니터링 이전 · 헬스 체크 · 영향 전수 정리](backend/2026-11-23-k8s-cleanup.md) | 반영 `43abf2d` — 결과 요약: backend `changes/README.md` |
+| 2026-11-23 | frontend | [Docker 실행 구성 정리 · 백엔드 모니터링 결합 끊기 · 헬스 체크 · 영향 전수 정리](frontend/2026-11-23-k8s-cleanup.md) | 반영 `7dd9da9` — 기록: frontend `frontend/changes/2026-11-23-k8s-cleanup.md` |
 
 ## 2026-11-23 묶음 — 반영 순서
 
