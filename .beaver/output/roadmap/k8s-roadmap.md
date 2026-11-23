@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-  P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::inprog
+  P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::done
   P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::todo
   P3 --> P4["Phase 4 · 프론트 (2)"]:::todo
   P3 --> P5["Phase 5 · 모니터링 (3)"]:::todo
@@ -24,7 +24,7 @@ flowchart LR
 ```
 
 - Phase 1 — 배포 구성 분리 · 유닛 3개 · 의존: — · 푼다: Phase 2 · 파일 집합: requests/, AGENTS.md, docs/ (+ backend · frontend 저장소) · done
-- Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · in-progress
+- Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · todo
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · todo
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · todo
@@ -34,14 +34,13 @@ flowchart LR
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: Phase 2 진행 중 · Next up: Phase 2
+지금: 진행 중 없음 · Next up: Phase 3
 
 ## 지금 할 일
-
-Phase 2 인프라 — PostgreSQL · RabbitMQ · Redis 를 로컬 클러스터에 띄우기
-- 먼저 PC 에 `helm` · `k3d` 설치(사용자) — 검증(`helm lint` · `helm template`)에 필요
-- 만들어진 것 확인 — `k3d cluster create …` → `./deskless.sh infra up` → 백엔드 `npm run start:user-service` 가 붙는지
-- 만족하면 "ok" — 커밋 · 푸시하고 Phase 3 으로
+Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 자동으로 늘고 줄게
+- 시작 전에 정하기 — 로컬 이미지를 어떻게 넣을지 · 접속 주소 모양 · 마이그레이션을 언제 돌릴지
+- 만들어진 것 확인 — ./deskless.sh backend up → kubectl get hpa 로 대수 · 사용률
+- 만족하면 "ok" — 커밋 · 푸시하고 Phase 4 · 5 로
 
 ## Scope & Actors
 
@@ -74,12 +73,12 @@ Phase 2 인프라 — PostgreSQL · RabbitMQ · Redis 를 로컬 클러스터에
 ### Phase 2 — 인프라 (PostgreSQL · RabbitMQ · Redis 를 파드 1개씩 띄워 로컬 개발을 되살리기) · depends: Phase 1
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 4 | 실행 명령 뼈대 `deskless.sh` | `.env` → Secret → `helm upgrade --install`, `KUBE_CONTEXT` 필수 · 필수 키 확인 — 이후 Phase 가 같은 스크립트에 하위 명령을 더한다(재사용) | bash 하나(Windows Git Bash · 서버 bash) | — | in-progress |
-| 5 | PostgreSQL | 옛 compose 와 같은 이미지 · 설정, 노드 고정 폴더 | 이미지 패치 버전 고정 | 4 | in-progress |
-| 6 | RabbitMQ + 앱 계정 | 관리자 · 앱 계정 3개 · 권한 = 옛 `init.sh` 그대로(설치 뒤 1회 Job) | — | 4 | in-progress |
-| 7 | Redis | AOF · 비밀번호 | — | 4 | in-progress |
-| 8 | PostgreSQL 백업 | 하루 1번 덤프 · 7일 보관 · `.env` 로 주기 · 보관 일수, 같은 서버 안 | 기본 03:00 한국 시각 | 5 | in-progress |
-| 9 | 로컬 클러스터 안내 · `.env.example` | k3d 생성 명령(PC `127.0.0.1` 5432 · 5672 · 15672 · 6379, 데이터 볼륨) · 인프라 키 · 로컬 기본값 = 백엔드 `.env.example` | — | 4 | in-progress |
+| 4 | 실행 명령 뼈대 `deskless.sh` | `.env` → Secret → `helm upgrade --install`, `KUBE_CONTEXT` 필수 · 필수 키 확인 — 이후 Phase 가 같은 스크립트에 하위 명령을 더한다(재사용) | bash 하나(Windows Git Bash · 서버 bash) | — | done(684cb66) |
+| 5 | PostgreSQL | 옛 compose 와 같은 이미지 · 설정, 노드 고정 폴더 | 이미지 패치 버전 고정 | 4 | done(684cb66) |
+| 6 | RabbitMQ + 앱 계정 | 관리자 · 앱 계정 3개 · 권한 = 옛 `init.sh` 그대로(설치 뒤 1회 Job) | — | 4 | done(684cb66) |
+| 7 | Redis | AOF · 비밀번호 | — | 4 | done(684cb66) |
+| 8 | PostgreSQL 백업 | 하루 1번 덤프 · 7일 보관 · `.env` 로 주기 · 보관 일수, 같은 서버 안 | 기본 03:00 한국 시각 | 5 | done(684cb66) |
+| 9 | 로컬 클러스터 안내 · `.env.example` | k3d 생성 명령(PC `127.0.0.1` 5432 · 5672 · 15672 · 6379, 데이터 볼륨) · 인프라 키 · 로컬 기본값 = 백엔드 `.env.example` | — | 4 | done(684cb66) |
 
 **Expected commands**:
 
@@ -168,8 +167,8 @@ Phase 2 인프라 — PostgreSQL · RabbitMQ · Redis 를 로컬 클러스터에
 |------|---------|---------|
 | #24 | `./deskless.sh <묶음> up` (운영 `.env`) | 같은 명령으로 운영 설치 |
 
-**Progress**: 3/25 units done (1/8 phases)
-**Next up**: Phase 2 인프라 — Phase 1 이 끝났고, 로컬 개발(백엔드 `npm run start:*`)을 되살리며 앱 차트가 붙을 자리를 만든다
+**Progress**: 9/25 units done (2/8 phases)
+**Next up**: Phase 3 백엔드 앱 — 의존(Phase 2) 모두 완료
 
 ## Cross-Cutting Rules
 
