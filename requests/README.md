@@ -15,7 +15,7 @@ deskless 가 하위 저장소(backend · frontend)에 보내는 수정 요청. �
 | 2026-11-23 | frontend | [Docker 실행 구성 정리 · 백엔드 모니터링 결합 끊기 · 헬스 체크 · 영향 전수 정리](frontend/2026-11-23-k8s-cleanup.md) | 반영 `7dd9da9` — 기록: frontend `frontend/changes/2026-11-23-k8s-cleanup.md` |
 | 2026-11-24 | frontend | [서버 쪽 게이트웨이 주소 API_INTERNAL_URL](frontend/2026-11-24-api-internal-url.md) | 보냄 — 반영 전에는 클러스터의 웹에서 로그인 · 가입 · 토큰 재발급만 실패(화면은 뜬다) |
 | 2026-11-24 | frontend | [공개 값(NEXT_PUBLIC_*)을 실행 때 읽기 · 이미지 하나로 모든 환경](frontend/2026-11-24-runtime-public-env.md) | 보냄 — 위 요청과 같은 자리(`request.ts`)라 함께 반영. 반영 전에는 web 이미지에 올린 쪽의 공개 주소가 박힌다(운영용은 서버에서 push) |
-| 2026-11-24 | backend | [`.env.example` 을 앱 · 기능 단위로 묶고 주석 줄이기](backend/2026-11-24-env-example-layout.md) | 보냄 — 키 · 값 그대로(순서 · 주석만), deskless 영향 없음 |
+| 2026-11-24 | backend | [`.env.example` 을 앱 · 기능 단위로 묶고 주석 줄이기](backend/2026-11-24-env-example-layout.md) | 반영 `b7a10b5` — 결과 요약: backend `changes/README.md`(절 13개 · 키 뜻은 `docs/architecture.md` "설정" 표 · 키 · 값 그대로 — deskless 영향 없음) |
 | 2026-11-24 | frontend | [`.env.example` 을 기능 단위로 묶고 주석 줄이기](frontend/2026-11-24-env-example-layout.md) | 보냄 — 위 프론트 요청 2건과 같은 파일이라 함께 반영, 키 · 값 그대로 |
 
 ## 2026-11-23 묶음 — 반영 순서

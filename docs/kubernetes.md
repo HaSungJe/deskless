@@ -186,7 +186,7 @@
 - `.env` 는 첫 설치 전에 — 비밀번호 모두 새로(`GRAFANA_ADMIN_PASSWORD` 포함) · 공개 주소 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 을 도메인으로 · `INFRA_EXPOSE=0` · `GATEWAY_EXPOSE=0` + `GATEWAY_HOST` · `WEB_EXPOSE=0` + `WEB_HOST`(Ingress) · `MONITORING_EXPOSE=0` · `KUBE_CONTEXT` 를 운영 클러스터로.
 - `backend/.env` — 비밀값 모두 새로(백엔드 `docs/architecture.md` "운영에 올리기 전 값 확인") · `SEED_SAMPLE_DATA=0` · `TRUST_PROXY=1`(Ingress 1단). `frontend/.env.production` — `NEXTAUTH_SECRET` 새로 · SNS 로그인 · 토스 키.
 - Grafana · DB 같은 도구는 밖으로 열지 않고 필요할 때만 잠깐 연결한다 — `kubectl --context <컨텍스트> -n deskless port-forward svc/grafana <PC 포트>:3001`(쿠버네티스 대시보드 `svc/dashboard …:4466` · PostgreSQL `svc/postgres …:5432` · RabbitMQ 관리 화면 `svc/rabbitmq …:15672` · Redis `svc/redis …:6379`).
-- 관리형 서비스(RDS · Amazon MQ · ElastiCache)를 쓰면 `.env` 의 `DATABASE_URL` · `REDIS_URL` · `RABBITMQ_HOST` 를 채우고 `infra up` 을 하지 않는다 — 관리형 브로커의 계정 · 권한은 `charts/infra/files/rabbitmq-init.sh` 로 만든다.
+- 관리형 서비스(RDS · Amazon MQ · ElastiCache)를 쓰면 `.env` 의 `DATABASE_URL` · `REDIS_URL` · `RABBITMQ_HOST` 를 채우고 `infra up` 을 하지 않는다 — 관리형 브로커의 계정 · 권한은 `charts/infra/files/rabbitmq-init.sh` 로 만든다. 마이그레이션 계정에는 PostgreSQL 확장 `btree_gist` 생성 권한이 필요하다(RDS PostgreSQL 13+ 는 DB 의 CREATE 권한 — 클러스터 안 postgres 는 관리자 계정이라 그대로 된다, backend `docs/architecture.md` "실행 · 배포").
 
 ### 이미지 — GHCR(사용자 결정 2026-11-24)
 
