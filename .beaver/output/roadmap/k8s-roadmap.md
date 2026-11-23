@@ -15,8 +15,8 @@ flowchart LR
   P4 -. 동시 가능 .- P5
   P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::done
   P5 --> P6
-  P6 --> P7["Phase 7 · 운영 실행 파일 · GHCR (2)"]:::inprog
-  P6 --> P8["Phase 8 · 쿠버네티스 대시보드 (1)"]:::inprog
+  P6 --> P7["Phase 7 · 운영 실행 파일 · GHCR (2)"]:::done
+  P6 --> P8["Phase 8 · 쿠버네티스 대시보드 (1)"]:::done
   classDef done stroke:#3fa46f,stroke-width:2px
   classDef inprog stroke:#e0a82e,stroke-width:3px
   classDef todo stroke:#8a949c,stroke-width:1px,stroke-dasharray:4 3
@@ -28,19 +28,19 @@ flowchart LR
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · done
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/monitoring/ · done
 - Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 7 · 파일 집합: charts/*/templates/networkpolicy.yaml · done
-- Phase 7 — 운영 실행 파일 · GHCR · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless-server.sh, deskless.sh, charts/backend/, charts/web/, .env.example, README.md, docs/kubernetes.md · in-progress
-- Phase 8 — 쿠버네티스 대시보드 · 유닛 1개 · 의존: Phase 6 · 푼다: — · 파일 집합: charts/dashboard/, deskless.sh, .env.example, README.md, docs/kubernetes.md · in-progress
+- Phase 7 — 운영 실행 파일 · GHCR · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless-server.sh, deskless.sh, charts/backend/, charts/web/, .env.example, README.md, docs/kubernetes.md · done
+- Phase 8 — 쿠버네티스 대시보드 · 유닛 1개 · 의존: Phase 6 · 푼다: — · 파일 집합: charts/dashboard/, deskless.sh, .env.example, README.md, docs/kubernetes.md · done
 
 동시 가능: Phase 4·Phase 5
 
-지금: Phase 7, Phase 8 진행 중 · Next up: Phase 7
+지금: 진행 중 없음 · Next up: 없음
 
 ## 지금 할 일
-Phase 7 · 8 확인 — 운영 실행 파일 · GHCR 올리기 · 받기 · 한 대씩 교체, 쿠버네티스 대시보드(웹)
-- 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 로컬 클러스터를 한 번 지운 뒤 .\deskless up — 전처럼 돌고 http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드에 로그인되는지(이미지 · GHCR 키는 비어도 된다)
-- GHCR — .env.example 의 이미지 절을 .env 에 옮겨 GHCR_USER · GHCR_PUSH_TOKEN 을 넣고 .\deskless push gateway 로 올라가는지(github.com 패키지 화면)
-- 프론트 요청서 2건(API_INTERNAL_URL · 공개 값 실행 때 읽기)을 프론트 세션에 보낸다
-- ok → 커밋 · 푸시하고 Phase 7 · 8 완료
+모든 Phase 완료 — 클러스터에서 직접 확인
+- 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 로컬 클러스터를 한 번 지운 뒤 .\deskless up → http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드 로그인
+- GHCR — .env.example 의 이미지 절을 .env 에 옮겨 GHCR_USER · GHCR_PUSH_TOKEN 을 넣고 .\deskless push gateway
+- 프론트 요청서 2건(API_INTERNAL_URL · 공개 값 실행 때 읽기)을 프론트 세션에 보낸다 — 반영되면 git submodule update --remote
+- 새로 할 일이 생기면 "로드맵에 추가"
 
 ## Scope & Actors
 
@@ -147,8 +147,8 @@ Phase 7 · 8 확인 — 운영 실행 파일 · GHCR 올리기 · 받기 · 한 
 ### Phase 7 — 운영 실행 파일 · GHCR (리눅스 서버에서 Docker 없이 k3s 로 같은 원클릭, 이미지는 GHCR 로 주고받기) · depends: Phase 6
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 23 | 운영 실행 파일 | 리눅스 서버에서 `git clone` → `./deskless-server.sh setup`(k3s · helm · nerdctl(BuildKit) · 값 파일 — 새 `.env` 는 `KUBE_CONTEXT=default` · `IMAGE_SOURCE=registry`) → `up`(같은 `.env` 키 · 같은 묶음 · 같은 차트 — `deskless.sh` 를 운영 모드로) | 서버마다 다른 값은 `.env` "이 서버" 절 · 서버 빌드도 남겨 둔다(막지 않는다) | — | in-progress |
-| 24 | GHCR 이미지 올리기 · 받기 · 한 대씩 교체 | 서비스 단위 `push [서비스…]` · `up [서비스…]`(고른 것만 새 태그, 나머지는 떠 있는 태그 그대로) · `restart [서비스…]`, 태그 = 하위 저장소 커밋 12자리, 받기 Secret · RollingUpdate(`maxSurge 1` · `maxUnavailable 0`). 프론트 공개 값은 실행 때(요청서) | 올리기 · 받기 키 둘 다 `.env` — PC · 서버 어디서나(사용자 2026-11-24), 비어도 로컬 build 실행 영향 없음 · 웹은 방안 b(이미지 하나) | 23 | in-progress |
+| 23 | 운영 실행 파일 | 리눅스 서버에서 `git clone` → `./deskless-server.sh setup`(k3s · helm · nerdctl(BuildKit) · 값 파일 — 새 `.env` 는 `KUBE_CONTEXT=default` · `IMAGE_SOURCE=registry`) → `up`(같은 `.env` 키 · 같은 묶음 · 같은 차트 — `deskless.sh` 를 운영 모드로) | 서버마다 다른 값은 `.env` "이 서버" 절 · 서버 빌드도 남겨 둔다(막지 않는다) | — | done(6660711) |
+| 24 | GHCR 이미지 올리기 · 받기 · 한 대씩 교체 | 서비스 단위 `push [서비스…]` · `up [서비스…]`(고른 것만 새 태그, 나머지는 떠 있는 태그 그대로) · `restart [서비스…]`, 태그 = 하위 저장소 커밋 12자리, 받기 Secret · RollingUpdate(`maxSurge 1` · `maxUnavailable 0`). 프론트 공개 값은 실행 때(요청서) | 올리기 · 받기 키 둘 다 `.env` — PC · 서버 어디서나(사용자 2026-11-24), 비어도 로컬 build 실행 영향 없음 · 웹은 방안 b(이미지 하나) | 23 | done(6660711) |
 
 **Expected commands**:
 
@@ -160,7 +160,7 @@ Phase 7 · 8 확인 — 운영 실행 파일 · GHCR 올리기 · 받기 · 한 
 ### Phase 8 — 쿠버네티스 대시보드 (클러스터 화면을 브라우저로 — 로그인 뒤) · depends: Phase 6
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 25 | 쿠버네티스 대시보드(웹) | Headlamp 웹 1대 + 로그인 문지기(nginx Basic 인증 — `.env` 의 `DASHBOARD_USER` · `DASHBOARD_PASSWORD`), 로컬은 PC `LOCAL_DASHBOARD_PORT`(14466), 운영은 port-forward | 직접 만든 차트(공식 차트 없이) · 들어온 사람은 ServiceAccount 권한 하나(기본 `cluster-admin`) · Headlamp 는 파드 안 127.0.0.1 에만(사용자 2026-11-24) | — | in-progress |
+| 25 | 쿠버네티스 대시보드(웹) | Headlamp 웹 1대 + 로그인 문지기(nginx Basic 인증 — `.env` 의 `DASHBOARD_USER` · `DASHBOARD_PASSWORD`), 로컬은 PC `LOCAL_DASHBOARD_PORT`(14466), 운영은 port-forward | 직접 만든 차트(공식 차트 없이) · 들어온 사람은 ServiceAccount 권한 하나(기본 `cluster-admin`) · Headlamp 는 파드 안 127.0.0.1 에만(사용자 2026-11-24) | — | done(6660711) |
 
 **Expected commands**:
 
@@ -168,8 +168,8 @@ Phase 7 · 8 확인 — 운영 실행 파일 · GHCR 올리기 · 받기 · 한 
 |------|---------|---------|
 | #25 | `./deskless.sh dashboard up` · `status` · `down` | 대시보드 설치 · 주소 · 지우기 |
 
-**Progress**: 22/25 units done (6/8 phases)
-**Next up**: Phase 7 운영 실행 파일 · GHCR(+ Phase 8 대시보드 — 같은 커밋) — 확인 뒤 완료
+**Progress**: 25/25 units done (8/8 phases)
+**Next up**: 없음 — 모든 Phase 완료
 
 ## Cross-Cutting Rules
 
