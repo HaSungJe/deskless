@@ -1,0 +1,9 @@
+# 백엔드 앱 차트 — gateway · user-service · admin-service · scheduler(+ 마이그레이션) · 앱별 자동 증설(HPA)
+# 설치 · 지우기는 ./deskless.sh backend up | down (이미지 빌드 → .env → Secret · ConfigMap → 이 차트). 규칙: docs/kubernetes.md
+# 앱이 배포에 기대하는 값: backend/docs/architecture.md "실행 · 배포 — deskless 저장소(쿠버네티스)"
+apiVersion: v2
+name: deskless-backend
+description: deskless 백엔드 앱 4개 — 마이그레이션 Job · 공용 파일 볼륨 · 게이트웨이 공개 주소 · 앱별 최소 ~ 최대 대수 자동 증설
+type: application
+version: 0.1.0
+appVersion: '1'

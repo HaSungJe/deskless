@@ -1,0 +1,86 @@
+# 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
+
+# 이미지 — deskless/<앱>:<태그>. ./deskless.sh 가 backend/ 커밋으로 빌드하고 태그를 넘긴다
+imageRepo: deskless
+imageTag: local
+
+# 설정 · 비밀값 해시 — ./deskless.sh 가 넘긴다. 바뀌면 파드가 새 값으로 다시 뜬다(Secret · ConfigMap 은 파드를 다시 띄우지 않으면 읽히지 않는다)
+configHash: ''
+
+# ./deskless.sh 가 만드는 것 — 비밀값(Secret)과 비밀이 아닌 앱 설정(ConfigMap, 백엔드 .env.example 과 같은 키)
+secretName: deskless-backend
+configName: deskless-backend-env
+
+# 노드의 공용 파일 폴더 기준 — INFRA_DATA_DIR(인프라와 같은 값). 아래 files 를 gateway · user-service · admin-service 가 /app/storage/files 로 같이 본다(노드 1대 전제)
+dataDir: /var/lib/deskless
+
+timeZone: Asia/Seoul
+
+# 자동 증설 기준 — CPU 코어 1개의 몇 %(AUTOSCALE_CPU_PERCENT). 앱의 CPU 요청값(cpuMilli)으로 나눠 HPA 목표로 바꾼다 — 대시보드 부하율 70% 와 같은 뜻
+autoscale:
+    cpuPercent: 70
+
+# 게이트웨이를 밖으로
+gateway:
+    # GATEWAY_EXPOSE — true 면 Service 를 LoadBalancer(k3s servicelb)로 3000 을 연다(로컬 k3d 가 PC 127.0.0.1:13000 으로 넘긴다)
+    expose: false
+    # GATEWAY_HOST — 있으면 Ingress(이 주소 → gateway:3000). 운영 공개 주소
+    host: ''
+    # INGRESS_CLASS — 비우면 클러스터 기본(k3s 는 Traefik)
+    ingressClass: ''
+    # GATEWAY_TLS_SECRET — 있으면 그 TLS Secret 으로 https
+    tlsSecret: ''
+
+# 앱 표 — 템플릿이 이 표를 돌며 Deployment · Service · HPA 를 만든다
+#   replicasMin · replicasMax  <APP>_REPLICAS_MIN · _MAX — 다르면 HPA(CPU), 같으면 그 대수로 고정
+#   cpuMilli · memory          자리 잡기용 요청값(한도는 두지 않는다)
+#   port · portEnv · hostEnv   본 포트와 그 env(0 이면 본 포트 없음 — scheduler), 바인딩 env(0.0.0.0)
+#   metricsPortEnv             지표 · 헬스 체크 포트 env(9464 — /metrics · /health/live · /health/ready)
+#   files                      공용 파일 볼륨을 /app/storage/files 에 붙일지(AWS_S3_BUCKET 이 빌 때 같은 폴더를 본다)
+#   secretKeys                 이 앱에만 주는 비밀값(Secret 의 키) — 쓰지 않는 다른 앱 · 관리자 비밀값은 주지 않는다
+apps:
+    gateway:
+        replicasMin: 2
+        replicasMax: 4
+        cpuMilli: 500
+        memory: 256Mi
+        port: 3000
+        portEnv: GATEWAY_PORT
+        hostEnv: ''
+        metricsPortEnv: GATEWAY_METRICS_PORT
+        files: true
+        secretKeys: [DATABASE_URL, REDIS_URL, JWT_SECRET, INTERNAL_API_TOKEN, RABBITMQ_GATEWAY_PASSWORD]
+    user-service:
+        replicasMin: 2
+        replicasMax: 4
+        cpuMilli: 500
+        memory: 256Mi
+        port: 3010
+        portEnv: USER_SERVICE_PORT
+        hostEnv: USER_SERVICE_HOST
+        metricsPortEnv: USER_SERVICE_METRICS_PORT
+        files: true
+        secretKeys: [DATABASE_URL, REDIS_URL, JWT_SECRET, TOKEN_CIPHER_KEY, INTERNAL_API_TOKEN, BCRYPT_CODE, RABBITMQ_USER_SERVICE_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY]
+    admin-service:
+        replicasMin: 1
+        replicasMax: 1
+        cpuMilli: 250
+        memory: 256Mi
+        port: 3020
+        portEnv: ADMIN_SERVICE_PORT
+        hostEnv: ADMIN_SERVICE_HOST
+        metricsPortEnv: ADMIN_SERVICE_METRICS_PORT
+        files: true
+        secretKeys: [DATABASE_URL, REDIS_URL, JWT_SECRET, TOKEN_CIPHER_KEY, INTERNAL_API_TOKEN, BCRYPT_CODE, RABBITMQ_ADMIN_SERVICE_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]
+    # 늘려도 crontab 은 회차마다 1대만 돈다(JobLockService)
+    scheduler:
+        replicasMin: 1
+        replicasMax: 1
+        cpuMilli: 100
+        memory: 192Mi
+        port: 0
+        portEnv: ''
+        hostEnv: ''
+        metricsPortEnv: SCHEDULER_METRICS_PORT
+        files: false
+        secretKeys: [DATABASE_URL, REDIS_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY]

@@ -1,0 +1,34 @@
+# 자동 증설 — 최소 < 최대인 앱마다 HPA(CPU). 목표 = 코어 1개의 cpuPercent% 를 그 앱의 CPU 요청값(cpuMilli)으로 나눈 값
+# 예: 70% · 요청 500m → 140%(= 코어 0.7개). Node 서버 한 대는 코어 1개를 주로 써서 대시보드 부하율(이벤트 루프 사용률)과 같은 뜻이 된다
+{{- $percent := int .Values.autoscale.cpuPercent }}
+{{- if lt $percent 1 }}
+{{- fail "AUTOSCALE_CPU_PERCENT 는 1 이상이어야 합니다" }}
+{{- end }}
+{{- range $name, $app := .Values.apps }}
+{{- if gt (int $app.replicasMax) (int $app.replicasMin) }}
+{{- if lt (int $app.cpuMilli) 1 }}
+{{- fail (printf "%s: cpuMilli 는 1 이상이어야 합니다" $name) }}
+{{- end }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "backend.labels" $name | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $app.replicasMin }}
+  maxReplicas: {{ $app.replicasMax }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ div (mul $percent 1000) (int $app.cpuMilli) }}
+{{- end }}
+{{- end }}

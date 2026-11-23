@@ -1,0 +1,31 @@
+# 게이트웨이 공개 주소(운영) — GATEWAY_HOST 가 있을 때만. 프론트는 다른 주소(사용자 결정 2026-11-23 — api.<도메인> · <도메인>)
+# 앞단이 맞춰야 할 것(backend/docs/architecture.md): 본문 10MB · SSE 버퍼링 끔 · /ws/ WebSocket 업그레이드 · 읽기 대기 120초
+#   k3s 기본 Traefik 은 본문 한도 · 버퍼링이 기본으로 없고 WebSocket 을 그대로 넘긴다 — 다른 Ingress(nginx 등)는 그 설정이 필요하다(로드맵 Phase 8 운영 준비)
+{{- if .Values.gateway.host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  labels:
+    {{- include "backend.labels" "gateway" | nindent 4 }}
+spec:
+  {{- with .Values.gateway.ingressClass }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.gateway.tlsSecret }}
+  tls:
+    - hosts: [{{ $.Values.gateway.host | quote }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.gateway.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+{{- end }}

@@ -9,7 +9,7 @@
 ```mermaid
 flowchart LR
   P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::done
-  P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::todo
+  P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::inprog
   P3 --> P4["Phase 4 · 프론트 (2)"]:::todo
   P3 --> P5["Phase 5 · 모니터링 (3)"]:::todo
   P4 -. 동시 가능 .- P5
@@ -25,7 +25,7 @@ flowchart LR
 
 - Phase 1 — 배포 구성 분리 · 유닛 3개 · 의존: — · 푼다: Phase 2 · 파일 집합: requests/, AGENTS.md, docs/ (+ backend · frontend 저장소) · done
 - Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
-- Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · todo
+- Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · in-progress
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · todo
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · todo
 - Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · todo
@@ -34,12 +34,12 @@ flowchart LR
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: 진행 중 없음 · Next up: Phase 3
+지금: Phase 3 진행 중 · Next up: Phase 3
 
 ## 지금 할 일
 Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 자동으로 늘고 줄게
-- 시작 전에 정하기 — 로컬 이미지를 어떻게 넣을지 · 접속 주소 모양 · 마이그레이션을 언제 돌릴지
-- 만들어진 것 확인 — ./deskless.sh backend up → kubectl get hpa 로 대수 · 사용률
+- 원클릭 — .\deskless up(또는 deskless.cmd 더블클릭): 값 파일 · 필수 값 · 도구를 먼저 모두 확인 → 클러스터 → 인프라 → 백엔드
+- 만들어진 것 확인 — Swagger http://localhost:13000/swagger · .\deskless status 로 대수 · 사용률
 - 만족하면 "ok" — 커밋 · 푸시하고 Phase 4 · 5 로
 
 ## Scope & Actors
@@ -91,13 +91,13 @@ Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 �
 ### Phase 3 — 백엔드 앱 · 자동 증설 (backend 4개를 클러스터에 올리고 대수가 자동으로 늘고 줄게) · depends: Phase 2
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 10 | 로컬 이미지 공급 | backend `Dockerfile` 로 `APP` 4개를 빌드해 로컬 클러스터에 넣기 | Tilt 로 갈지, 스크립트 빌드 + `k3d image import` 로 갈지 | — | todo |
-| 11 | 앱 설정 주입 | backend `.env` 키를 Secret · ConfigMap 으로 — 앱이 쓰지 않는 비밀값은 주지 않는다 | 앱별 키 나누기 | — | todo |
-| 12 | 앱 4개 Deployment · Service | 컨테이너 포트 · 바인딩 0.0.0.0 · 서비스 주소 · 인스턴스 ID · 지표 포트 9464 · 프로브 `/health/*` · 종료 유예 | — | 10, 11 | todo |
-| 13 | 마이그레이션 Job | user-service 마이그레이션 · 시드 — 적용은 사용자 | 설치 때마다 돌지, 명령으로만 돌지 | 12 | todo |
-| 14 | 공용 파일 볼륨 | gateway · user-service · admin-service 가 같은 `/app/storage/files`(노드 1대) | — | 12 | todo |
-| 15 | Ingress (gateway) | 공개 주소 · `/ws/` 업그레이드 · 업로드 10MB · SSE 버퍼링 끔 · 읽기 대기 120초 · `TRUST_PROXY` | 접속 주소 모양(아래 Open Decisions) | 12 | todo |
-| 16 | 자동 증설 | 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(기본 gateway · user-service 2 ~ 4, 나머지 1 ~ 1) — 다르면 HPA(CPU 70%), 같으면 고정 | CPU 요청값(70% 의 기준 — 코어 1개) | 12 | todo |
+| 10 | 로컬 이미지 공급 | backend `Dockerfile` 로 `APP` 4개를 빌드해 로컬 클러스터에 넣기 | Tilt 로 갈지, 스크립트 빌드 + `k3d image import` 로 갈지 | — | in-progress |
+| 11 | 앱 설정 주입 | backend `.env` 키를 Secret · ConfigMap 으로 — 앱이 쓰지 않는 비밀값은 주지 않는다 | 앱별 키 나누기 | — | in-progress |
+| 12 | 앱 4개 Deployment · Service | 컨테이너 포트 · 바인딩 0.0.0.0 · 서비스 주소 · 인스턴스 ID · 지표 포트 9464 · 프로브 `/health/*` · 종료 유예 | — | 10, 11 | in-progress |
+| 13 | 마이그레이션 Job | user-service 마이그레이션 · 시드 — 적용은 사용자 | 설치 때마다 돌지, 명령으로만 돌지 | 12 | in-progress |
+| 14 | 공용 파일 볼륨 | gateway · user-service · admin-service 가 같은 `/app/storage/files`(노드 1대) | — | 12 | in-progress |
+| 15 | Ingress (gateway) | 공개 주소 · `/ws/` 업그레이드 · 업로드 10MB · SSE 버퍼링 끔 · 읽기 대기 120초 · `TRUST_PROXY` | 접속 주소 모양(아래 Open Decisions) | 12 | in-progress |
+| 16 | 자동 증설 | 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(기본 gateway · user-service 2 ~ 4, 나머지 1 ~ 1) — 다르면 HPA(CPU 70%), 같으면 고정 | CPU 요청값(70% 의 기준 — 코어 1개) | 12 | in-progress |
 
 **Expected commands**:
 
@@ -172,8 +172,9 @@ Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 �
 
 ## Cross-Cutting Rules
 
-- 로컬 · 운영 파일을 나누지 않는다 — 차트 · values 한 벌, 환경 차이는 그 PC · 서버의 `.env` 하나(새 키는 `.env.example` 에 로컬 기본값과 함께).
-- 실행은 `deskless.sh <묶음> <동작>` 하나로 — 묶음마다 하위 명령을 더하고, 모든 명령은 `.env` 의 `KUBE_CONTEXT` 로만 클러스터에 닿는다.
+- 로컬 · 운영 파일을 나누지 않는다 — 차트 · values 한 벌, 환경 차이는 그 PC · 서버의 값 파일(새 키는 `.env.example` 에 로컬 기본값과 함께). 값 파일은 주인별로 — deskless `.env` 는 클러스터 몫, 앱 값은 하위 저장소의 `.env`(같은 값을 두 번 적지 않는다).
+- 브라우저 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 한 곳 — 앱의 주소 키에 넣는다. 로컬 클러스터는 13000 · 15000(PC `npm` 의 3000 · 5000 과 따로).
+- 실행은 `deskless.sh` 하나로 — 전부는 원클릭 `up`(먼저 모두 확인 · 로컬 클러스터부터, 묶음이 늘면 `up` 과 그 확인에 더한다), 묶음별은 `<묶음> <동작>` — 묶음마다 하위 명령을 더하고, 모든 명령은 `.env` 의 `KUBE_CONTEXT` 로만 클러스터에 닿는다.
 - 앱 대수는 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(모든 앱 기본값) — 다르면 HPA, 같으면 고정.
 - Ingress 종류 · 저장소 종류 이름은 차트에 고정하지 않는다(`.env`).
 - 데이터 관리 도구 컨테이너는 넣지 않는다(PC 앱) — 예외 RabbitMQ 관리 화면 · 모니터링.
@@ -182,14 +183,17 @@ Phase 3 백엔드 앱 · 자동 증설 — backend 4개를 올리고 대수가 �
 
 ## Open Decisions (roadmap-level)
 
-- [ ] 로컬 이미지 공급 — Tilt(AGENTS 에 적힌 방향, 코드 바꾸면 자동 다시 빌드) vs `deskless.sh` 빌드 + `k3d image import`(단순) (Phase 3 · 4)
-- [ ] 접속 주소 모양 — 한 주소에서 경로로 나눌지(`/` 프론트 · `/api` 게이트웨이), 주소를 둘로 나눌지(로컬 `localhost:5000` · `:3000` 유지) — 프론트 `NEXT_PUBLIC_*` · 백엔드 `CORS_ORIGINS` · `GATEWAY_PUBLIC_URL` 이 따라 바뀐다 (Phase 3 · 4)
+- [x] 로컬 이미지 공급 — `deskless.sh` 빌드 + `k3d image import`(사용자 2026-11-23 — 더 설치할 도구 없이 단순하게, Tilt 는 쓰지 않음) (Phase 3 · 4)
+- [x] 접속 주소 모양 — 주소를 따로: 로컬 클러스터 `localhost:13000`(gateway) · `:15000`(프론트) — PC `npm` 실행(3000 · 5000)과 부딪히지 않게, 운영 도메인 둘(api.<도메인> · <도메인>). 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 정해 앱 주소 키에 넣는다 — Phase 4 는 프론트 주소 키 · 카카오 · 네이버 콜백(15000) 등록(사용자 2026-11-23) (Phase 3 · 4)
+- [x] 마이그레이션 — `backend up` 때마다 앱보다 먼저 자동(옛 compose migrate 와 같다), 따로는 `backend migrate`(사용자 2026-11-23) (Phase 3)
+- [x] 앱 값 파일 — deskless 가 받아 둔 하위 저장소 사본의 `.env`(`.env.example` 복사)에서 읽고 deskless `.env` 에는 클러스터 몫만, 같은 값을 두 번 적지 않는다(사용자 2026-11-23). 백엔드 · 프론트는 독립 프로젝트라 작업 폴더의 `.env` 와는 따로 둔다(사용자 2026-11-24 — 백엔드 `backend/.env`, 프론트는 Phase 4 에서 같은 방식) (Phase 3 · 4)
 - [ ] 모니터링 방식 — 직접 만든 차트(옛 compose 1:1, 단순) vs kube-prometheus-stack(오퍼레이터 · 기본 대시보드 많음) (Phase 5)
 - [ ] 이미지 레지스트리 — GHCR · Docker Hub · 서버 자체 레지스트리 (Phase 8)
 
 ## Notes / Risks
 
-- 이 PC 에 `helm` · `k3d` 가 없다 — Phase 2 검증 전에 사용자 설치(`winget install Helm.Helm` · `winget install k3d.k3d`).
+- `helm` v4.3.2 · `k3d` v5.9.0(k3s 1.35) 설치됨(2026-11-23) — 실제 클러스터 설치 확인(Phase 2 인프라)은 사용자가 아직.
+- 로컬 Docker Desktop(WSL2 커널 5.15)은 cgroup v1 — k3s 1.35 kubelet 이 거부해 클러스터 만들기에 `--kubelet-arg=fail-cgroupv1=false` 를 붙였다(2026-11-23). WSL 이 cgroup v2 가 되면 뺀다.
 - 공용 파일 볼륨은 노드 1대 전제 — 서버가 여러 대가 되면 S3 모드(백엔드 `AWS_S3_BUCKET`)로.
 - 로컬 PC 자원(Docker Desktop 메모리 · CPU) — 앱 최대 대수 · 인프라를 모두 띄우면 무거울 수 있다. 로컬 `.env` 로 대수를 낮춘다.
 - 원본 배포 파일은 backend `3125886` 에 있다 — `git -C backend show 3125886:<파일>`.

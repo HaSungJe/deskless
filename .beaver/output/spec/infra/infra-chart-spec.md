@@ -32,7 +32,7 @@ affected_data: ["Secret deskless-infra", "Helm 릴리스 deskless-infra", "노�
 
 1. **설정 읽기** — `.env` 를 KEY=VALUE 줄만 읽는다(따옴표 · 줄 끝 CR 정리, `source` 하지 않음).
    - `.env` 가 없으면 → 복사 안내와 함께 멈춘다
-2. **필수 확인** — `KUBE_CONTEXT` 와 비밀값 9개, 백업 보관 일수(1 이상의 정수)를 확인한다.
+2. **필수 확인** — `KUBE_CONTEXT` 와 비밀값 9개(인프라 6개는 `.env`, 브로커 앱 계정 3개는 `backend/.env`), 백업 보관 일수(1 이상의 정수)를 확인한다.
    - 비었거나 틀리면 → 그 키 이름을 알리고 클러스터에 닿기 전에 멈춘다
 3. **비밀값 넣기** — 네임스페이스 `deskless` 와 Secret `deskless-infra` 를 쓰는 키만 골라 만든다(다시 돌리면 갱신).
 4. **차트 설치** — `helm upgrade --install deskless-infra charts/infra` 로 세 StatefulSet · Service · 백업 CronJob 을 설치한다.
@@ -46,7 +46,7 @@ affected_data: ["Secret deskless-infra", "Helm 릴리스 deskless-infra", "노�
 | `KUBE_CONTEXT` | ✓ | 설치할 클러스터 — 모든 명령이 여기에만 닿는다 |
 | `POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` | ✓ | 첫 설치 때만 적용 — 백엔드 `DATABASE_URL` 과 같게 |
 | `RABBITMQ_USER` · `RABBITMQ_PASSWORD` | ✓ | 관리자(관리 화면 · 계정 Job) |
-| `RABBITMQ_GATEWAY_PASSWORD` · `RABBITMQ_USER_SERVICE_PASSWORD` · `RABBITMQ_ADMIN_SERVICE_PASSWORD` | ✓ | 앱 계정 — 백엔드 `.env` 와 같게 |
+| `RABBITMQ_GATEWAY_PASSWORD` · `RABBITMQ_USER_SERVICE_PASSWORD` · `RABBITMQ_ADMIN_SERVICE_PASSWORD` | ✓ | 앱 계정 — `backend/.env` 에서 읽는다(앱이 쓰는 값 그대로 — Phase 3 에서 옮김) |
 | `REDIS_PASSWORD` | ✓ | 백엔드 `REDIS_URL` 과 같게 |
 | `INFRA_EXPOSE` | | 1 이면 5432 · 5672 · 15672 · 6379 를 노드 포트로(로컬), 기본 0 |
 | `INFRA_DATA_DIR` | | 노드의 데이터 · 백업 폴더, 기본 `/var/lib/deskless` |
@@ -136,7 +136,7 @@ affected_data: ["Secret deskless-infra", "Helm 릴리스 deskless-infra", "노�
 
 | 테이블 | 무엇이 바뀌나 |
 |---|---|
-| Secret `deskless-infra` | `.env` 의 비밀값 9개로 만들거나 갱신 |
+| Secret `deskless-infra` | `.env` 의 비밀값 6개 + `backend/.env` 의 브로커 앱 계정 3개로 만들거나 갱신 |
 | Helm 릴리스 `deskless-infra` | StatefulSet 3 · Service 4(헤드리스 포함) · CronJob · ConfigMap · 계정 Job(hook) |
 | 노드 폴더 `INFRA_DATA_DIR` | `postgres` · `rabbitmq` · `redis` 데이터, `backups/postgres` 덤프 |
 

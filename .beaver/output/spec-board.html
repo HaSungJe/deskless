@@ -39,18 +39,24 @@ details{font-size:14px}summary{cursor:pointer;color:var(--muted)}.f.now summary{
 .empty{color:var(--muted)}
 </style></head><body><div class="wrap">
 <div class="top"><h1>spec 보드 · 지금 작업 중</h1><p>도메인별 기능 · 한 줄 목표 · 진입점 · 단계 · TDD — spec/plan/report가 저장될 때마다 다시 생성된다</p></div>
-<p class="why">기준: 진행 중 Phase 2</p><div class="sum"><span>기능 <b>1</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>0</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div>
-<section class="dom"><h2>infra<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec now">
-<header><div><h3>인프라 차트<span class="flow">flow</span></h3><p class="sub">DB · 브로커 · Redis 를 파드 1개씩</p><details class="eps"><summary>진입점 5</summary><p class="ep mono">CMD ./deskless.sh infra up<br>CMD ./deskless.sh infra status<br>CMD ./deskless.sh infra backup<br>CMD CronJob postgres-backup<br>CMD ./deskless.sh infra down</p></details></div><div class="st"><span class="chip ph">Phase 2</span><span class="chip spec">기획</span></div></header>
-<p class="d">사용자가 ./deskless.sh infra up 을 실행하면 PostgreSQL · RabbitMQ(앱 계정 · 권한 포함) · Redis 가 쿠버네티스에 파드 1개씩 뜨고, PostgreSQL 은 매일 백업된다.</p>
-<details open><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 12건</p></div></details>
+<p class="why">기준: Phase 3 (--phase)</p><div class="sum"><span>기능 <b>1</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>0</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div>
+<section class="dom"><h2>backend<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec now">
+<header><div><h3>백엔드 앱 · 자동 증설<span class="flow">flow</span></h3><details class="eps"><summary>진입점 7</summary><p class="ep mono">CMD ./deskless.sh backend up<br>CMD HorizontalPodAutoscaler &lt;앱&gt;<br>CMD ./deskless.sh backend status<br>CMD ./deskless.sh backend migrate<br>CMD ./deskless.sh backend down<br>CMD ./deskless.sh up<br>CMD ./deskless.sh status</p></details></div><div class="st"><span class="chip ph">Phase 3</span><span class="chip spec">기획</span></div></header>
+<p class="d">사용자가 ./deskless.sh backend up 을 실행하면 gateway · user-service · admin-service · scheduler 가 쿠버네티스에 뜨고(마이그레이션이 먼저), 최소 &lt; 최대인 앱은 CPU 사용률로 그 사이에서 대수가 자동으로 바뀐다.</p>
+<details open><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 27건</p></div></details>
 
-<footer class="mono">spec/infra/infra-chart-spec.md</footer>
+<footer class="mono">spec/backend/backend-apps-spec.md</footer>
 </article></div></section>
-<details class="all"><summary>전체 spec <small>(1개 · 도메인 1)</small></summary><div class="sum"><span>기능 <b>1</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>0</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div><section class="dom"><h2>infra<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec">
-<header><div><h3>인프라 차트<span class="flow">flow</span></h3><p class="sub">DB · 브로커 · Redis 를 파드 1개씩</p><details class="eps"><summary>진입점 5</summary><p class="ep mono">CMD ./deskless.sh infra up<br>CMD ./deskless.sh infra status<br>CMD ./deskless.sh infra backup<br>CMD CronJob postgres-backup<br>CMD ./deskless.sh infra down</p></details></div><div class="st"><span class="chip ph">Phase 2</span><span class="chip spec">기획</span></div></header>
+<details class="all"><summary>전체 spec <small>(2개 · 도메인 2)</small></summary><div class="sum"><span>기능 <b>2</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>1</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div><section class="dom"><h2>backend<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec">
+<header><div><h3>백엔드 앱 · 자동 증설<span class="flow">flow</span></h3><details class="eps"><summary>진입점 7</summary><p class="ep mono">CMD ./deskless.sh backend up<br>CMD HorizontalPodAutoscaler &lt;앱&gt;<br>CMD ./deskless.sh backend status<br>CMD ./deskless.sh backend migrate<br>CMD ./deskless.sh backend down<br>CMD ./deskless.sh up<br>CMD ./deskless.sh status</p></details></div><div class="st"><span class="chip ph">Phase 3</span><span class="chip spec">기획</span></div></header>
+<p class="d">사용자가 ./deskless.sh backend up 을 실행하면 gateway · user-service · admin-service · scheduler 가 쿠버네티스에 뜨고(마이그레이션이 먼저), 최소 &lt; 최대인 앱은 CPU 사용률로 그 사이에서 대수가 자동으로 바뀐다.</p>
+<details><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 27건</p></div></details>
+
+<footer class="mono">spec/backend/backend-apps-spec.md</footer>
+</article></div></section><section class="dom"><h2>infra<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f ship">
+<header><div><h3>인프라 차트<span class="flow">flow</span></h3><p class="sub">DB · 브로커 · Redis 를 파드 1개씩</p><details class="eps"><summary>진입점 5</summary><p class="ep mono">CMD ./deskless.sh infra up<br>CMD ./deskless.sh infra status<br>CMD ./deskless.sh infra backup<br>CMD CronJob postgres-backup<br>CMD ./deskless.sh infra down</p></details></div><div class="st"><span class="chip ph">Phase 2</span><span class="chip ship">배포</span></div></header>
 <p class="d">사용자가 ./deskless.sh infra up 을 실행하면 PostgreSQL · RabbitMQ(앱 계정 · 권한 포함) · Redis 가 쿠버네티스에 파드 1개씩 뜨고, PostgreSQL 은 매일 백업된다.</p>
-<details><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 12건</p></div></details>
+<details><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">테스트 없음 (위임형이거나 생략)</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 12건</p></div></details>
 
 <footer class="mono">spec/infra/infra-chart-spec.md</footer>
 </article></div></section></details>
