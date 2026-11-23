@@ -13,7 +13,7 @@ flowchart LR
   P3 --> P4["Phase 4 · 프론트 (2)"]:::done
   P3 --> P5["Phase 5 · 모니터링 (3)"]:::done
   P4 -. 동시 가능 .- P5
-  P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::inprog
+  P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::done
   P5 --> P6
   P5 --> P7["Phase 7 · 부하율 기준 자동 증설 (1)"]:::todo
   P6 -. 동시 가능 .- P7
@@ -28,20 +28,19 @@ flowchart LR
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · done
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · done
-- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · in-progress
+- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · done
 - Phase 7 — 부하율 기준 자동 증설 · 유닛 1개 · 의존: Phase 5 · 푼다: — · 파일 집합: charts/monitoring/, charts/backend/ (HPA 기준) · todo
 - Phase 8 — 운영 준비 · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless.sh, README.md, .env.example · todo
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: Phase 6 진행 중 · Next up: Phase 6
+지금: 진행 중 없음 · Next up: Phase 7
 
 ## 지금 할 일
-Phase 6 네트워크 격리 — 만들어졌다, 원클릭으로 다시 올려 확인하고 ok
-- 원클릭 — .env 에 NETWORK_POLICY 키(원클릭이 알려 준다) → .\deskless up
-- 확인 — 웹 · Swagger · Grafana(대시보드에 값) · Prometheus Targets 가 모두 UP, PC 의 DB 도구 · npm 백엔드도 그대로 붙는다
-- 이상하면 NETWORK_POLICY=0 으로 끄고 비교
-- ok → 커밋 · 푸시하고 Phase 8 운영 준비(또는 선택 Phase 7)로
+남은 두 Phase 중 고르기 — Phase 8 운영 준비(레지스트리 · 서버 k3s 설치 안내) 또는 Phase 7 부하율 기준 자동 증설(선택)
+- Phase 8 — 정할 것: 이미지 레지스트리(GHCR · Docker Hub · 서버 자체 레지스트리)
+- Phase 7 — CPU 기준으로 충분하면 하지 않는다(Grafana 서비스 부하로 CPU 증설이 부하율과 잘 맞는지 본 뒤 정한다)
+- 고르면 "Phase N 시작"
 
 ## Scope & Actors
 
@@ -137,7 +136,7 @@ Phase 6 네트워크 격리 — 만들어졌다, 원클릭으로 다시 올려 �
 ### Phase 6 — 네트워크 격리 (서비스는 gateway 만, 인프라는 앱만 닿게) · depends: Phase 4, Phase 5
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 22 | NetworkPolicy | 옛 internal 네트워크 대응 — user-service · admin-service 는 gateway 만, 인프라는 앱 · 수집기만, 지표 포트는 Prometheus 만 | — | — | in-progress |
+| 22 | NetworkPolicy | 옛 internal 네트워크 대응 — user-service · admin-service 는 gateway 만, 인프라는 앱 · 수집기만, 지표 포트는 Prometheus 만 | — | — | done(c9ae9bb) |
 
 **Expected commands**:
 
@@ -168,8 +167,8 @@ Phase 6 네트워크 격리 — 만들어졌다, 원클릭으로 다시 올려 �
 |------|---------|---------|
 | #24 | `./deskless.sh <묶음> up` (운영 `.env`) | 같은 명령으로 운영 설치 |
 
-**Progress**: 21/25 units done (5/8 phases)
-**Next up**: Phase 6 네트워크 격리 — 의존(Phase 4, Phase 5) 모두 완료
+**Progress**: 22/25 units done (6/8 phases)
+**Next up**: Phase 7 부하율 기준 자동 증설 — 의존(Phase 5) 모두 완료
 
 ## Cross-Cutting Rules
 
