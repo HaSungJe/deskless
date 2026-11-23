@@ -1,0 +1,26 @@
+# 네트워크 격리(웹) — 들어오는 쪽만(네임스페이스 기본 차단은 인프라 차트)
+# - 본 포트 5000 은 공개 입구라 어디서나, 지표 · 헬스 포트 9464 는 Prometheus 만(kubelet 프로브는 막히지 않는다)
+# 끄기: NETWORK_POLICY=0(.env) → networkPolicy.enabled=false
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "web.selector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - port: 5000
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+              app.kubernetes.io/part-of: deskless-monitoring
+      ports:
+        - port: 9464
+{{- end }}

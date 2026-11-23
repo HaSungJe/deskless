@@ -38,3 +38,7 @@ web:
     ingressClass: ''
     # WEB_TLS_SECRET — 있으면 그 TLS Secret 으로 https
     tlsSecret: ''
+
+# 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
+networkPolicy:
+    enabled: true

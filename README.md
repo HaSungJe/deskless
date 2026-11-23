@@ -13,7 +13,7 @@
 | `backend/` | https://github.com/HaSungJe/deskless-backend | NestJS — gateway · user-service · admin-service · scheduler |
 | `frontend/` | https://github.com/HaSungJe/deskless-frontend | Next.js — 이용자 · 업체 관리자 · 관리자 화면 |
 
-이 저장소에는 앱 코드가 없고, 두 저장소를 쿠버네티스(인프라 · 백엔드 · 웹 · 모니터링)로 엮는 설정과 실행 파일만 있습니다. 앱은 사용률에 따라 대수가 자동으로 늘고 줄어듭니다.
+이 저장소에는 앱 코드가 없고, 두 저장소를 쿠버네티스(인프라 · 백엔드 · 웹 · 모니터링)로 엮는 설정과 실행 파일만 있습니다. 앱은 사용률에 따라 대수가 자동으로 늘고 줄어들고, 서비스끼리는 필요한 곳만 통하도록 막혀 있습니다(내부 서버는 게이트웨이만, DB · 브로커 · Redis 는 앱만 — `.env` 의 `NETWORK_POLICY`).
 
 ## 설치
 
@@ -63,5 +63,5 @@ k3d cluster delete <이름>      # 로컬 클러스터 지우기 — 이름은 .
 ## 더 보기
 
 - 하위 저장소 최신 받기 — `git submodule update --remote` → `git add backend frontend` → 커밋. `backend/` · `frontend/` 안에서는 고치지 않고, 고칠 것은 [requests/](requests/README.md) 요청서로 보냅니다.
-- 운영 서버 · 백업 · 비밀번호 바꾸기 · 값 흐름 · 자동 증설 · 모니터링 — [docs/kubernetes.md](docs/kubernetes.md)
+- 운영 서버 · 백업 · 비밀번호 바꾸기 · 값 흐름 · 자동 증설 · 네트워크 격리 · 모니터링 — [docs/kubernetes.md](docs/kubernetes.md)
 - 저장소 규칙 — [AGENTS.md](AGENTS.md) · 진행 순서 — [로드맵](.beaver/output/roadmap/k8s-roadmap.md)

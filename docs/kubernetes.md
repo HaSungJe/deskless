@@ -1,6 +1,6 @@
 # 쿠버네티스 관리 규칙
 
-> 인프라(`charts/infra/`) · 백엔드(`charts/backend/`) · 프론트(`charts/web/`) · 모니터링(`charts/monitoring/`) 차트와 실행 명령(`deskless.sh` · `deskless.cmd`)이 있다. 네트워크 격리 · 운영 준비는 로드맵(`.beaver/output/roadmap/k8s-roadmap.md`) 순서로 — 생기면 이 문서를 실제 파일 기준으로 고친다.
+> 인프라(`charts/infra/`) · 백엔드(`charts/backend/`) · 프론트(`charts/web/`) · 모니터링(`charts/monitoring/`) 차트(네트워크 격리 포함)와 실행 명령(`deskless.sh` · `deskless.cmd`)이 있다. 운영 준비는 로드맵(`.beaver/output/roadmap/k8s-roadmap.md`) 순서로 — 생기면 이 문서를 실제 파일 기준으로 고친다.
 
 ## 목적 — 서버 자동 증설
 
@@ -96,6 +96,27 @@
 - **여는 곳** — 로컬은 `MONITORING_EXPOSE=1` → Grafana Service 3001(→ 3000 — 노드의 3000 은 게이트웨이가 쓴다) · Prometheus 9090 을 LoadBalancer 로(k3d 가 PC `127.0.0.1:13001` · `:19090`). 운영은 열지 않고 `kubectl port-forward svc/grafana 13001:3001`. Prometheus · Grafana 는 1대(`Recreate` — 노드 폴더 하나), 자동 증설 대상이 아니다.
 - **설정이 바뀌면 다시 뜬다** — 설정 파일 해시(차트가 `checksum/config`)와 Secret 해시(`configHash`)를 파드 주석에.
 
+### 네트워크 격리 — NetworkPolicy(사용자 결정 2026-11-24)
+
+옛 compose 의 내부 네트워크(internal · data)를 대신한다. **들어오는 쪽만 막는다** — 나가는 쪽(토스 · AWS · SMS 같은 외부 호출 · DNS)은 열어 둔다. k3s 는 내장 정책 컨트롤러가 NetworkPolicy 를 지키고, 노드에서 오는 kubelet 프로브는 막지 않는다.
+
+| 받는 쪽 | 허용 | 정책 파일 |
+|---|---|---|
+| 네임스페이스 전체 | 기본 차단(`default-deny-ingress`) — 규칙이 없는 파드는 아무도 닿지 못한다 | `charts/infra` |
+| PostgreSQL 5432 | 백엔드 묶음 파드 전체(마이그레이션 Job 포함) · `postgres-exporter` · `postgres-backup` Job | `charts/infra` |
+| Redis 6379 | 백엔드 묶음 · `redis-exporter` | `charts/infra` |
+| RabbitMQ 5672 · 15672 · 15692 | 백엔드 묶음(5672) · `rabbitmq-init` Job(15672) · Prometheus(15692) | `charts/infra` |
+| gateway 본 포트 | 어디서나(공개 입구 — 웹 서버 · Ingress · 로컬 입구) | `charts/backend` |
+| user-service · admin-service 본 포트 | gateway 만 | `charts/backend` |
+| 웹 5000 | 어디서나(공개 입구) | `charts/web` |
+| 앱 · 웹 지표 포트 9464 · 수집기 9187 · 9121 | Prometheus 만 | 각 차트 |
+| Prometheus 9090 | Grafana 만 | `charts/monitoring` |
+| Grafana 3000 | 없음(운영은 `port-forward` — 파드 안으로 바로 들어가 정책과 무관) | `charts/monitoring` |
+
+- **PC 로 연 입구는 그대로** — `INFRA_EXPOSE=1` 이면 PostgreSQL · Redis · RabbitMQ(5672 · 15672)를, `MONITORING_EXPOSE=1` 이면 Grafana · Prometheus 를 어디서나 닿게 연다(로컬의 npm 백엔드 · DB 도구 · 브라우저). 0(운영)이면 위 표대로만.
+- **차트마다 자기 파드 몫** — `charts/<묶음>/templates/networkpolicy.yaml`. 허용 대상은 라벨(`app.kubernetes.io/name` · `app.kubernetes.io/part-of: deskless-<묶음>`)로 고른다 — 새 파드(앱 · Job · 수집기)를 더하면 그 파드가 받는 포트의 허용 규칙과, 그 파드가 부르는 쪽(예: DB)의 허용 대상에 함께 넣는다. 안 넣으면 기본 차단에 막힌다.
+- **끄는 스위치** — `.env` 의 `NETWORK_POLICY`(기본 1). 0 이면 네 차트 모두 정책을 만들지 않는다 — 통신 문제가 정책 때문인지 가려 볼 때만.
+
 ## 클러스터 · 차트 · 실행 명령
 
 - **클러스터** — 로컬은 k3d(Docker Desktop 위 k3s), 운영은 리눅스 서버에 k3s 직접 설치(서버 1 ~ 3대). 같은 k3s 라 동작이 같다. 나중에 관리형(EKS)으로 옮겨도 차트는 그대로 — Ingress 종류 · 저장소 종류 이름은 `.env` 로 받는다. 로컬 k3d 클러스터는 원클릭(`./deskless.sh up`)이 없으면 `.env` 의 "이 PC" 값(포트 · 데이터 볼륨 · API 주소 · k3s 인자)으로 만들고, 운영 k3s 설치는 저장소 파일이 아니다 — 서버에서 사용자가 설치한다(로드맵 Phase 8).
@@ -134,7 +155,7 @@
 | `*-lb`(nginx) | Service |
 | `gateway-lb` | Ingress(`/ws/` WebSocket 업그레이드 포함) |
 | `migrate` | Job |
-| 공용 네트워크(internal) | NetworkPolicy |
+| 공용 네트워크(internal · data) | NetworkPolicy(들어오는 쪽만 — 위 "네트워크 격리") |
 | `.env` | Secret · ConfigMap(값은 deskless `.env` · `backend/.env` · `frontend/.env.production`) |
 | `compose.monitoring.yml` · `docker/prometheus/` · `docker/grafana/` | 모니터링(Prometheus · Grafana · 수집기 · 기록 규칙 · 대시보드) |
 

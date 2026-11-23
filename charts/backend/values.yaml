@@ -84,3 +84,7 @@ apps:
         metricsPortEnv: SCHEDULER_METRICS_PORT
         files: false
         secretKeys: [DATABASE_URL, REDIS_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY]
+
+# 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
+networkPolicy:
+    enabled: true

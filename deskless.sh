@@ -356,6 +356,7 @@ infra_up() {
     # 비밀이 아닌 환경 값은 values 파일로(쉼표가 든 cron 식도 그대로)
     {
         printf 'expose: %s\n' "$expose"
+        printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
         printf 'dataDir: %s\n' "$(yaml_str "$(env_get INFRA_DATA_DIR /var/lib/deskless)")"
         printf 'postgres:\n  backup:\n    schedule: %s\n    keepDays: %s\n' "$(yaml_str "$(env_get POSTGRES_BACKUP_SCHEDULE '0 3 * * *')")" "$keep"
     } > "$values_file"
@@ -519,6 +520,7 @@ backend_up() {
         printf 'configHash: %s\n' "$(yaml_str "$(cat "$secret_file" "$config_file" | sha256sum | cut -c1-16)")"
         printf 'dataDir: %s\n' "$(yaml_str "$(env_get INFRA_DATA_DIR /var/lib/deskless)")"
         printf 'autoscale:\n  cpuPercent: %s\n' "$percent"
+        printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
         printf 'gateway:\n  expose: %s\n  host: %s\n  ingressClass: %s\n  tlsSecret: %s\n' \
             "$(truthy "$(env_get GATEWAY_EXPOSE 0)")" "$(yaml_str "$(env_get GATEWAY_HOST)")" "$(yaml_str "$(env_get INGRESS_CLASS)")" "$(yaml_str "$(env_get GATEWAY_TLS_SECRET)")"
         printf 'apps:\n'
@@ -628,6 +630,7 @@ web_up() {
         printf 'imageTag: %s\n' "$(yaml_str "$tag")"
         printf 'configHash: %s\n' "$(yaml_str "$(cat "$secret_file" "$config_file" | sha256sum | cut -c1-16)")"
         printf 'autoscale:\n  cpuPercent: %s\n' "$percent"
+        printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
         printf 'web:\n  replicasMin: %s\n  replicasMax: %s\n  expose: %s\n  host: %s\n  ingressClass: %s\n  tlsSecret: %s\n' \
             "$min" "$max" "$(truthy "$(env_get WEB_EXPOSE 0)")" "$(yaml_str "$(env_get WEB_HOST)")" "$(yaml_str "$(env_get INGRESS_CLASS)")" "$(yaml_str "$(env_get WEB_TLS_SECRET)")"
     } > "$values_file"
@@ -709,6 +712,7 @@ monitoring_up() {
     {
         printf 'dataDir: %s\n' "$(yaml_str "$(env_get INFRA_DATA_DIR /var/lib/deskless)")"
         printf 'expose: %s\n' "$expose"
+        printf 'networkPolicy:\n  enabled: %s\n' "$(truthy "$(env_get NETWORK_POLICY 1)")"
         printf 'configHash: %s\n' "$(yaml_str "$(sha256sum "$secret_file" | cut -c1-16)")"
         printf 'prometheus:\n  retention: %s\n' "$(yaml_str "$retention")"
     } > "$values_file"

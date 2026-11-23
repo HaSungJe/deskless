@@ -1,0 +1,41 @@
+# 네트워크 격리(백엔드) — 옛 compose 의 내부 네트워크(internal) 대응. 들어오는 쪽만(네임스페이스 기본 차단은 인프라 차트)
+# - gateway 본 포트는 공개 입구라 어디서나(웹 서버 · Ingress · 로컬 입구)
+# - user-service · admin-service 본 포트는 gateway 만
+# - 지표 · 헬스 포트(9464)는 Prometheus 만 — kubelet 프로브(노드에서)는 k3s 정책 컨트롤러가 막지 않는다
+# - 마이그레이션 Job 은 들어오는 연결이 없다(규칙 없음 = 기본 차단)
+# 끄기: NETWORK_POLICY=0(.env) → networkPolicy.enabled=false
+{{- if .Values.networkPolicy.enabled }}
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "backend.labels" $name | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "backend.selector" $name | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    {{- if eq $name "gateway" }}
+    - ports:
+        - port: {{ $app.port }}
+    {{- else if $app.port }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "backend.selector" "gateway" | nindent 14 }}
+      ports:
+        - port: {{ $app.port }}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+              app.kubernetes.io/part-of: deskless-monitoring
+      ports:
+        - port: 9464
+{{- end }}
+{{- end }}

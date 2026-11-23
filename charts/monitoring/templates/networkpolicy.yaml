@@ -1,0 +1,69 @@
+# 네트워크 격리(모니터링) — 들어오는 쪽만(네임스페이스 기본 차단은 인프라 차트)
+# - Prometheus 9090 은 Grafana(데이터 원본)만, 수집기(9187 · 9121)는 Prometheus 만
+# - expose(MONITORING_EXPOSE) 면 Grafana 3000 · Prometheus 9090 을 어디서나(로컬 입구). 아니면 Grafana 는 kubectl port-forward 로만(파드 안으로 바로 들어가 정책과 무관)
+# 끄기: NETWORK_POLICY=0(.env) → networkPolicy.enabled=false
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus
+  labels:
+    {{- include "monitoring.labels" "prometheus" | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "monitoring.selector" "prometheus" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "monitoring.selector" "grafana" | nindent 14 }}
+      ports:
+        - port: 9090
+    {{- if .Values.expose }}
+    - ports:
+        - port: 9090
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana
+  labels:
+    {{- include "monitoring.labels" "grafana" | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "monitoring.selector" "grafana" | nindent 6 }}
+  policyTypes: [Ingress]
+  {{- if .Values.expose }}
+  ingress:
+    - ports:
+        - port: 3000
+  {{- else }}
+  # 열지 않을 때 — 들어오는 연결 없음(port-forward 만)
+  ingress: []
+  {{- end }}
+{{- range $name, $port := dict "postgres-exporter" 9187 "redis-exporter" 9121 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "monitoring.labels" $name | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "monitoring.selector" $name | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "monitoring.selector" "prometheus" | nindent 14 }}
+      ports:
+        - port: {{ $port }}
+{{- end }}
+{{- end }}

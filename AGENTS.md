@@ -20,7 +20,7 @@ deskless — 무인 객실 대여 서비스(바로방)의 백엔드 · 프론트
 - **PC · 사용자마다 다른 값은 실행 파일에 고정하지 않는다**(사용자 결정 2026-11-24) — Git Bash · Docker Desktop 경로, PC 포트(게이트웨이 · 웹 · Grafana · Prometheus · 인프라 · 쿠버네티스 API), 데이터 볼륨 이름, k3s 인자, 기다리는 시간은 `deskless.sh` · `deskless.cmd` 에 적지 않고 `.env`(`.env.example` 의 "이 PC" 절 — 이 PC 기준 기본값)에서 읽는다. 다른 사용자 · 환경도 `.env` 만 고쳐 같은 실행 · 확인을 한다. 클러스터 안 이름 · 주소(네임스페이스 · 릴리스 · Service · 앱 포트)는 차트 · 스크립트가 정하는 고정값이다.
 - **값 파일은 주인별로, 같은 값을 두 번 적지 않는다**(사용자 결정 2026-11-23 · 2026-11-24) — deskless `.env` 는 클러스터 몫(대상 클러스터 · 인프라 계정 · 백업 · 대수 · 공개 · 공개 주소 · Grafana 관리자 · 관리형 주소), 백엔드 앱 값(비밀값 · 설정 · 브로커 앱 계정 비밀번호)은 deskless 가 받아 둔 사본의 `backend/.env`(`backend/.env.example` 복사 — 로컬은 그대로), 프론트 값은 `frontend/.env.production`(없으면 `frontend/.env` — `frontend/.env.example` 복사 + `NEXTAUTH_SECRET`)에서 `deskless.sh` 가 읽는다. 백엔드 · 프론트는 독립 프로젝트라 각자 작업 폴더의 `.env` 로 개발하고, 쿠버네티스는 여기서 하므로 클러스터용 값 파일은 deskless 쪽 사본에 따로 둔다(작업 폴더의 `.env` 를 읽지 않는다). 백엔드 키를 deskless `.env` 로 옮겨 적지 않는다.
 - **데이터 관리 도구는 배포 구성에 넣지 않는다** — DB · Redis 는 PC 앱(DBeaver · Another Redis Desktop Manager 등)으로 붙는다. 예외는 이미지에 든 RabbitMQ 관리 화면과 모니터링(수집기 · 대시보드) → [docs/kubernetes.md](docs/kubernetes.md)
-- **README.md 는 변경마다 같이 갱신한다** — 구성 · 명령 · 실행 방법이 바뀌는 작업은 같은 커밋에서 README.md 도 고친다.
+- **README.md 는 변경마다 같이 갱신한다**(사용자 결정 2026-11-24 — 다시 강조) — 작업을 마칠 때마다 README.md 를 다시 읽고, 바뀐 것 · 더해진 것(구성 · 명령 · 실행 방법 · 서비스 주소 · 값 파일 · 동작)을 같은 커밋에서 반영한다. README 는 짧게 — 제목 › 소개 › 설치 › 실행(주소 · 명령) › 더 보기, 포트 같은 PC 값은 숫자 대신 `.env` 키로, 절차 · 세부는 docs/kubernetes.md.
 
 ## 구성
 
@@ -30,7 +30,7 @@ deskless/
 ├── frontend/    # submodule → HaSungJe/deskless-frontend (main) — 받기 전용
 ├── charts/
 │   ├── infra/   # 인프라 차트 deskless-infra — PostgreSQL · RabbitMQ(앱 계정 Job) · Redis · PostgreSQL 백업 CronJob
-│   ├── backend/ # 백엔드 차트 deskless-backend — 앱 4개(values 의 앱 표) · 마이그레이션 hook · 자동 증설 HPA · 게이트웨이 Ingress
+│   ├── backend/ # 백엔드 차트 deskless-backend — 앱 4개(values 의 앱 표) · 마이그레이션 hook · 자동 증설 HPA · 게이트웨이 Ingress · 네트워크 격리
 │   ├── web/     # 프론트 차트 deskless-web — Next.js 서버 · 자동 증설 HPA · 웹 Ingress · 서버 안 게이트웨이 주소(API_INTERNAL_URL)
 │   └── monitoring/ # 모니터링 차트 deskless-monitoring — Prometheus(앱 파드 자동 찾기 · 기록 규칙) · Grafana(대시보드 2개) · PostgreSQL · Redis 수집기
 ├── deskless.sh  # 실행 명령 하나 — ./deskless.sh up(원클릭: 먼저 모두 확인 → 로컬 클러스터 → 묶음 전부) · <묶음> <동작>(infra · backend · web · monitoring — .env · backend/.env · frontend/.env.production → Secret · ConfigMap → Helm, KUBE_CONTEXT 에만)
@@ -44,7 +44,7 @@ deskless/
 └── AGENTS.md
 ```
 
-네트워크 격리(NetworkPolicy) · 운영 준비(레지스트리)는 아직 없다 — 순서는 로드맵, 생기면 이 트리와 [docs/kubernetes.md](docs/kubernetes.md) 를 실제 파일 기준으로 고친다.
+운영 준비(레지스트리) · 부하율 기준 자동 증설은 아직 없다 — 순서는 로드맵, 생기면 이 트리와 [docs/kubernetes.md](docs/kubernetes.md) 를 실제 파일 기준으로 고친다.
 
 ## 하위 저장소 다루기
 
@@ -52,7 +52,7 @@ deskless/
 - **요청서를 받는 곳** — backend 는 `changes/`(반영 상태 · 결과 요약을 `changes/README.md` 에 — `backend/AGENTS.md:18`), frontend 는 `frontend/changes/`. 결과 요약을 받으면 여기서 `requests/README.md` 상태를 고치고 최신을 받는다 → [docs/requests.md](docs/requests.md)
 - **원본 기준 커밋** — 하위 저장소에서 지운 배포 파일은 요청서의 기준 커밋에 남는다(지금 backend `3125886` — compose · nginx · RabbitMQ 계정 · 모니터링). 옮겨 올 때 `git -C backend show 3125886:<파일>` 로 읽는다.
 
-## 쿠버네티스 관리 목표 (사용자 결정 2026-11-23 — 인프라 · 백엔드 · 프론트 · 모니터링 차트 · 실행 명령 있음, 네트워크 격리 · 운영 준비는 로드맵)
+## 쿠버네티스 관리 목표 (사용자 결정 2026-11-23 — 인프라 · 백엔드 · 프론트 · 모니터링 차트(네트워크 격리 포함) · 실행 명령 있음, 운영 준비는 로드맵)
 
 - **목적은 서버 자동 증설** — 모든 앱(gateway · user-service · admin-service · scheduler · 프론트 web)이 사용률에 따라 `.env` 에 정한 최소 ~ 최대 대수 사이에서 늘고 준다. 앱마다 `<APP>_REPLICAS_MIN` · `<APP>_REPLICAS_MAX` 를 **모두 기본값과 함께** 두고, 최소 < 최대면 자동 증설, 같으면 그 대수로 고정. 기준은 CPU 사용률 70% 로 시작.
 - **그 밖은 Docker 에서 돌던 것처럼 단순하게** — 인프라(PostgreSQL · RabbitMQ · Redis)는 클러스터 안 파드 1개씩(직접 만든 차트, 관리형 서비스를 쓰는 운영에서는 설치하지 않음), PostgreSQL 백업은 하루 1번 · 7일 보관 · 같은 서버 안(주기 · 보관 일수는 `.env`).
@@ -87,6 +87,7 @@ deskless/
 - [ ] 클러스터 · `helm install` · `./deskless.sh` 를 실행하지 않았다(`helm lint` · `helm template` · `bash -n` · `docker build` 만)
 - [ ] 차트를 바꿨으면 `helm lint --strict` 와 `helm template`(로컬 값 · 운영 값 둘 다)으로 Service 형태 · 폴더 · Secret 참조를 확인했다
 - [ ] 새 `.env` 키는 `deskless.sh`(Secret 키 목록 · values 파일) · 차트 · `.env.example` 에 함께 넣었다
+- [ ] 새 파드(앱 · Job · 수집기)는 그 차트의 `networkpolicy.yaml` 에 받는 포트의 허용 규칙을, 부르는 쪽(DB · 브로커 · Redis 등) 정책에 허용 대상을 넣었다(네임스페이스 기본 차단)
 - [ ] PC · 사용자마다 다른 값(경로 · PC 포트 · 볼륨 · 인자 · 기다리는 시간)을 실행 파일에 고정하지 않고 `.env` 로 받았다(`.env.example` 에 이 PC 기준 기본값)
 - [ ] 앱에는 그 앱이 쓰는 비밀값만 준다(`charts/backend/values.yaml` 의 `secretKeys`) — 백엔드가 비밀값 키를 더하거나 바꾸면 `BACKEND_SECRET_*` · `secretKeys` 를 함께, 차트가 정하는 env 를 더하면 `BACKEND_CLUSTER_KEYS` 에도(설정 키는 그대로 넘어간다)
 - [ ] `docs/` 에는 규칙 문서만 — 기획은 `.beaver/output/`

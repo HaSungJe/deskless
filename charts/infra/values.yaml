@@ -33,3 +33,7 @@ redis:
     image: redis:8.10.3-alpine
     resources:
         requests: {cpu: 50m, memory: 64Mi}
+
+# 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
+networkPolicy:
+    enabled: true

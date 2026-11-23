@@ -40,3 +40,7 @@ redisExporter:
     image: oliver006/redis_exporter:v1.97.0-alpine
     resources:
         requests: {cpu: 20m, memory: 32Mi}
+
+# 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
+networkPolicy:
+    enabled: true

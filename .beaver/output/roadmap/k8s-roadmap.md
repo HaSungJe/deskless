@@ -13,7 +13,7 @@ flowchart LR
   P3 --> P4["Phase 4 · 프론트 (2)"]:::done
   P3 --> P5["Phase 5 · 모니터링 (3)"]:::done
   P4 -. 동시 가능 .- P5
-  P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::todo
+  P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::inprog
   P5 --> P6
   P5 --> P7["Phase 7 · 부하율 기준 자동 증설 (1)"]:::todo
   P6 -. 동시 가능 .- P7
@@ -28,19 +28,20 @@ flowchart LR
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
 - Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · done
 - Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · done
-- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · todo
+- Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · in-progress
 - Phase 7 — 부하율 기준 자동 증설 · 유닛 1개 · 의존: Phase 5 · 푼다: — · 파일 집합: charts/monitoring/, charts/backend/ (HPA 기준) · todo
 - Phase 8 — 운영 준비 · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless.sh, README.md, .env.example · todo
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: 진행 중 없음 · Next up: Phase 6
+지금: Phase 6 진행 중 · Next up: Phase 6
 
 ## 지금 할 일
-Phase 6 네트워크 격리 — 서비스는 gateway 만, 인프라는 앱 · 수집기만 닿게(Phase 7 부하율 기준 증설은 선택 · 동시 가능)
-- 확인 — 웹 · Swagger · Grafana · Prometheus 가 원클릭 뒤 그대로 열리고, 프론트 요청서(API_INTERNAL_URL)가 반영되면 클러스터 웹 로그인까지
-- 정할 것 — 격리 범위(서비스 · 인프라 · 지표 포트) · Phase 7 을 같이 할지
-- ok → 커밋 · 푸시하고 Phase 8 운영 준비로
+Phase 6 네트워크 격리 — 만들어졌다, 원클릭으로 다시 올려 확인하고 ok
+- 원클릭 — .env 에 NETWORK_POLICY 키(원클릭이 알려 준다) → .\deskless up
+- 확인 — 웹 · Swagger · Grafana(대시보드에 값) · Prometheus Targets 가 모두 UP, PC 의 DB 도구 · npm 백엔드도 그대로 붙는다
+- 이상하면 NETWORK_POLICY=0 으로 끄고 비교
+- ok → 커밋 · 푸시하고 Phase 8 운영 준비(또는 선택 Phase 7)로
 
 ## Scope & Actors
 
@@ -136,7 +137,7 @@ Phase 6 네트워크 격리 — 서비스는 gateway 만, 인프라는 앱 · �
 ### Phase 6 — 네트워크 격리 (서비스는 gateway 만, 인프라는 앱만 닿게) · depends: Phase 4, Phase 5
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 22 | NetworkPolicy | 옛 internal 네트워크 대응 — user-service · admin-service 는 gateway 만, 인프라는 앱 · 수집기만, 지표 포트는 Prometheus 만 | — | — | todo |
+| 22 | NetworkPolicy | 옛 internal 네트워크 대응 — user-service · admin-service 는 gateway 만, 인프라는 앱 · 수집기만, 지표 포트는 Prometheus 만 | — | — | in-progress |
 
 **Expected commands**:
 
