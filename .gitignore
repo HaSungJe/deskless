@@ -1,0 +1,9 @@
+# 환경 설정 — 비밀값 · 접속정보가 들어 있어 커밋하지 않는다(예시 파일만 커밋)
+.env
+.env.*
+!.env.example
+
+# OS · 편집기
+.DS_Store
+Thumbs.db
+/.idea
