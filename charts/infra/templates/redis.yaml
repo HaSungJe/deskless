@@ -1,0 +1,65 @@
+# Redis — 옛 compose.redis.yml(backend 3125886) 그대로: 문 정보의 원본이라 AOF(매초 기록) · 비밀번호
+# redis-server 를 첫 인자로 넘겨 이미지 진입점이 데이터 폴더 소유자를 맞추고 redis 사용자로 실행하게 한다($(REDIS_PASSWORD) 는 쿠버네티스가 env 로 채운다)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    {{- include "infra.labels" "redis" | nindent 4 }}
+spec:
+  type: {{ include "infra.serviceType" . }}
+  selector:
+    {{- include "infra.selector" "redis" | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    {{- include "infra.labels" "redis" | nindent 4 }}
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "infra.selector" "redis" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "infra.labels" "redis" | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec', '--requirepass', '$(REDIS_PASSWORD)']
+          env:
+            {{- include "infra.secretEnv" (dict "root" $ "name" "REDIS_PASSWORD" "key" "REDIS_PASSWORD") | nindent 12 }}
+            - name: TZ
+              value: {{ .Values.timeZone | quote }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ['sh', '-c', 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ['sh', '-c', 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        {{- include "infra.hostPathVolume" (dict "root" $ "name" "data" "path" "redis") | nindent 8 }}

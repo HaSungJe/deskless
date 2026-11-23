@@ -1,0 +1,63 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>spec 보드</title>
+<meta http-equiv="refresh" content="20">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{--ground:#F7F4EF;--panel:#FFFFFF;--ink:#1E1A16;--muted:#6B635A;--line:#E3DCD2;--accent:#D9641E;--accent-soft:#FCEADF;--done:#2F8F5B;--prog:#C98A12;--todo:#9AA0A6;--todo-soft:#EEF0F2;--ship:#2F6FB0;--shadow:0 1px 2px rgba(30,26,22,.05),0 8px 24px rgba(30,26,22,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#15130F;--panel:#1F1B16;--ink:#F1EBE2;--muted:#A79E92;--line:#35302A;--accent:#F08A45;--accent-soft:#3B2517;--done:#52C288;--prog:#E8B34F;--todo:#8D949B;--todo-soft:#272B30;--ship:#6FA3E0;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35)}}
+:root[data-theme="dark"]{--ground:#15130F;--panel:#1F1B16;--ink:#F1EBE2;--muted:#A79E92;--line:#35302A;--accent:#F08A45;--accent-soft:#3B2517;--done:#52C288;--prog:#E8B34F;--todo:#8D949B;--todo-soft:#272B30;--ship:#6FA3E0;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35)}
+*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:16px;line-height:1.55}
+.wrap{max-width:1040px;margin:0 auto;padding:32px 24px 72px}h1,h2,h3{font-family:"Do Hyeon","Noto Sans KR",sans-serif;font-weight:400;margin:0}.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:8px}.top h1{font-size:34px}.top p{color:var(--muted);font-size:14px;margin:0}
+.why{color:var(--accent);font-size:14px;font-weight:700;margin:0 0 14px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}.sum span{background:var(--panel);border:1.5px solid var(--line);border-radius:999px;padding:5px 14px;font-size:14px;color:var(--muted)}.sum b{color:var(--ink);font-weight:500}
+.dom{margin-bottom:30px}.dom h2{font-size:26px;margin-bottom:12px;display:flex;align-items:baseline;gap:10px}.dom h2 small{font-family:"Noto Sans KR",sans-serif;font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:14px}@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.f{background:var(--panel);border-radius:16px;box-shadow:var(--shadow);border-left:6px solid var(--todo);padding:18px 20px 14px;display:flex;flex-direction:column;gap:10px}.f.plan{border-left-color:var(--prog)}.f.build{border-left-color:var(--done)}.f.ship{border-left-color:var(--ship)}.f.now{outline:2px solid var(--accent);grid-column:1/-1}
+.f .sub{margin:4px 0 0;font-size:14px;color:var(--muted)}.eps{margin-top:4px}.eps summary{font-size:13px}.hint{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px}
+.f header{display:flex;justify-content:space-between;gap:12px;align-items:start}.f h3{font-size:22px;line-height:1.2}.f .flow{font-family:"Noto Sans KR",sans-serif;font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:0 6px;margin-left:8px;vertical-align:middle}
+.ep{font-size:13px;color:var(--muted);margin:4px 0 0}.st{display:flex;gap:6px;flex-wrap:wrap;justify-content:end;flex-shrink:0}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--todo-soft);color:var(--muted);white-space:nowrap}.chip.plan{color:var(--prog)}.chip.build{color:var(--done)}.chip.ship{color:var(--ship)}.chip.ph{color:var(--ink)}.chip.open{background:var(--accent-soft);color:var(--accent);font-weight:700}.chip.pend{color:var(--accent)}
+.d{margin:0;font-size:15px;color:var(--ink)}
+.tdd{background:var(--ground);border-radius:12px;padding:10px 14px;margin-top:6px}.en{margin-top:10px}.en:first-child{margin-top:2px}.enh{margin:0;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:8px 10px;background:var(--panel);border:1px solid var(--line);border-radius:10px}.enh b{font-size:15.5px;color:var(--ink)}.enh .mono{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.enh i{font-style:normal;font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.ek{font-size:11.5px;font-weight:700;color:var(--panel);background:var(--accent);border-radius:6px;padding:1px 8px;white-space:nowrap}.ek.none{background:var(--todo)}.eng{padding-left:14px;border-left:2px solid var(--line);margin:4px 0 0 12px}
+.fl{padding:6px 4px}.fl summary{font-size:12.5px;color:var(--muted)}.fl ol{margin:6px 0 2px;padding-left:22px;display:grid;gap:4px;font-size:13.5px;color:var(--ink)}.fl ol b{font-weight:700}.fbt{display:block;font-size:12.5px;color:var(--muted)}
+.fd{padding:10px 4px 2px}.fdr{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 6px}.fs{display:flex;flex-direction:column;gap:5px;max-width:220px}
+.fsb{align-self:flex-start;display:flex;align-items:center;gap:7px;background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:6px 11px 6px 7px}.fsn{flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--panel);font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center}.fsl{font-size:13.5px;font-weight:700;color:var(--ink)}
+.fa{color:var(--accent);font-size:15px;line-height:34px}.fbr{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:3px 8px;margin-left:14px;position:relative}.fba{color:var(--accent);font-weight:700;margin-right:5px}
+.tg{border-top:1px dashed var(--line)}.tg:first-child{border-top:0}
+.tg>summary{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 4px;align-items:baseline}.tg>summary::-webkit-details-marker{display:none}
+.tg .tt{font-size:15.5px;font-weight:700;color:var(--ink)}.tg .tt::before{content:"▸";color:var(--accent);margin-right:8px;font-weight:400}.tg[open] .tt::before{content:"▾"}
+.tg .cnt{font-size:12.5px;color:var(--muted);white-space:nowrap}.tg .rl{grid-column:1/-1;font-size:13.5px;color:var(--ink);font-weight:400;padding-left:20px}.tg .rl b{color:var(--accent);font-weight:700;margin-right:8px}
+.tg .fn{grid-column:1/-1;font-size:11.5px;color:var(--muted);font-weight:400;padding-left:20px;overflow-wrap:anywhere}.nowhy{color:var(--muted);font-style:italic;font-weight:400}.nowhy .mono{font-style:normal;font-size:12px}
+.ct{width:100%;border-collapse:collapse;margin:2px 0 12px;font-size:13.5px;table-layout:fixed}.ct th{text-align:left;font-size:11.5px;letter-spacing:.06em;color:var(--muted);font-weight:500;padding:4px 8px;border-bottom:1px solid var(--line)}.ct th:first-child{width:44%}
+.ct td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}.ct tr:last-child td{border-bottom:0}.ct td.what{color:var(--ink)}.ct td.mono{font-size:12px;color:var(--muted)}.ct td.ex{color:var(--ink)}
+.tag{font-size:11px;color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:6px;white-space:nowrap;margin-right:6px}.tdd .none,.tdd .skip{margin:0;font-size:13px;color:var(--muted)}.tdd .skip{margin-top:6px}
+details{font-size:14px}summary{cursor:pointer;color:var(--muted)}.f.now summary{color:var(--ink);font-weight:500}.plain{margin:6px 0 0;padding-left:18px;display:grid;gap:3px;color:var(--muted)}
+.f footer{font-size:11.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px}
+.all{border-top:1px solid var(--line);margin-top:12px}.all>summary{padding:16px 4px;font-family:"Do Hyeon","Noto Sans KR",sans-serif;font-size:22px;color:var(--ink);list-style:none;display:flex;justify-content:space-between}.all>summary::-webkit-details-marker{display:none}.all>summary::after{content:"+";color:var(--muted)}.all[open]>summary::after{content:"–"}.all .sum{margin:8px 0 20px}
+.empty{color:var(--muted)}
+</style></head><body><div class="wrap">
+<div class="top"><h1>spec 보드 · 지금 작업 중</h1><p>도메인별 기능 · 한 줄 목표 · 진입점 · 단계 · TDD — spec/plan/report가 저장될 때마다 다시 생성된다</p></div>
+<p class="why">기준: 진행 중 Phase 2</p><div class="sum"><span>기능 <b>1</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>0</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div>
+<section class="dom"><h2>infra<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec now">
+<header><div><h3>인프라 차트<span class="flow">flow</span></h3><p class="sub">DB · 브로커 · Redis 를 파드 1개씩</p><details class="eps"><summary>진입점 5</summary><p class="ep mono">CMD ./deskless.sh infra up<br>CMD ./deskless.sh infra status<br>CMD ./deskless.sh infra backup<br>CMD CronJob postgres-backup<br>CMD ./deskless.sh infra down</p></details></div><div class="st"><span class="chip ph">Phase 2</span><span class="chip spec">기획</span></div></header>
+<p class="d">사용자가 ./deskless.sh infra up 을 실행하면 PostgreSQL · RabbitMQ(앱 계정 · 권한 포함) · Redis 가 쿠버네티스에 파드 1개씩 뜨고, PostgreSQL 은 매일 백업된다.</p>
+<details open><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 12건</p></div></details>
+
+<footer class="mono">spec/infra/infra-chart-spec.md</footer>
+</article></div></section>
+<details class="all"><summary>전체 spec <small>(1개 · 도메인 1)</small></summary><div class="sum"><span>기능 <b>1</b></span><span>TDD 케이스 <b>0</b></span><span>미결 결정 <b>0</b></span><span>배포 <b>0</b> · 구현 <b>0</b> · 설계 <b>0</b> · 기획 <b>1</b></span></div><section class="dom"><h2>infra<small>기능 1 · TDD 0</small></h2><div class="grid"><article class="f spec">
+<header><div><h3>인프라 차트<span class="flow">flow</span></h3><p class="sub">DB · 브로커 · Redis 를 파드 1개씩</p><details class="eps"><summary>진입점 5</summary><p class="ep mono">CMD ./deskless.sh infra up<br>CMD ./deskless.sh infra status<br>CMD ./deskless.sh infra backup<br>CMD CronJob postgres-backup<br>CMD ./deskless.sh infra down</p></details></div><div class="st"><span class="chip ph">Phase 2</span><span class="chip spec">기획</span></div></header>
+<p class="d">사용자가 ./deskless.sh infra up 을 실행하면 PostgreSQL · RabbitMQ(앱 계정 · 권한 포함) · Redis 가 쿠버네티스에 파드 1개씩 뜨고, PostgreSQL 은 매일 백업된다.</p>
+<details><summary>TDD · 없음 · 생략 있음</summary><div class="tdd"><p class="none">아직 정해지지 않음 — spec의 TDD Cases 또는 plan의 Test Cases에서 채워진다</p><p class="skip">결과 표에서 테스트하지 않기로 한 상황 12건</p></div></details>
+
+<footer class="mono">spec/infra/infra-chart-spec.md</footer>
+</article></div></section></details>
+</div>
+<script>
+(function(){var K='beaver-spec-board:'+location.pathname;try{var st=JSON.parse(sessionStorage.getItem(K)||'null');if(st){document.querySelectorAll('details').forEach(function(d,i){if(st.open&&st.open.indexOf(i)>=0)d.open=true;else if(st.closed&&st.closed.indexOf(i)>=0)d.open=false});window.scrollTo(0,st.y||0)}}catch(e){}
+function save(){try{var open=[],closed=[];document.querySelectorAll('details').forEach(function(d,i){(d.open?open:closed).push(i)});sessionStorage.setItem(K,JSON.stringify({y:window.scrollY,open:open,closed:closed}))}catch(e){}}
+window.addEventListener('pagehide',save);window.addEventListener('beforeunload',save);})();
+</script>
+</body></html>

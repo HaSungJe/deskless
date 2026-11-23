@@ -1,6 +1,6 @@
 # 쿠버네티스 관리 규칙
 
-> 방향 · 결정만 있고 설정 파일(차트 · 실행 명령)은 아직 없다(사용자 결정 2026-11-23). 차트가 생기면 이 문서를 실제 파일 기준(`경로:줄`)으로 고친다.
+> 인프라 차트(`charts/infra/`)와 실행 명령(`deskless.sh`)이 있다. 앱 · 프론트 · 모니터링 차트는 로드맵(`.beaver/output/roadmap/k8s-roadmap.md`) 순서로 — 생기면 이 문서를 실제 파일 기준으로 고친다.
 
 ## 목적 — 서버 자동 증설
 
@@ -28,16 +28,47 @@
 - 계정 · 비밀번호는 처음 설치 때만 적용된다(compose 와 같다) — 운영은 첫 설치 전에 정한다. 리소스는 요청값만 작게, 한도는 두지 않는다(compose 에 한도가 없었다).
 - 밖으로 여는 포트는 로컬뿐 — 로컬은 PC `127.0.0.1` 의 5432 · 5672 · 15672 · 6379(백엔드 `.env.example` 의 `localhost` 주소 그대로), 운영은 열지 않고 필요할 때 `kubectl port-forward`.
 
+**차트 `charts/infra/`(릴리스 `deskless-infra`, 네임스페이스 `deskless`)**
+
+| 파일 | 만드는 것 |
+|---|---|
+| `values.yaml` | 기본값 — 이미지(패치 버전까지 고정: `postgres:17.12-alpine` · `rabbitmq:4.4.0-management-alpine` · `redis:8.10.3-alpine`), `expose`(false) · `dataDir`(`/var/lib/deskless`) · 백업 주기 · 보관 일수 · 리소스 요청값 |
+| `templates/postgres.yaml` · `rabbitmq.yaml` · `redis.yaml` | 서비스마다 StatefulSet(파드 1) + Service(`postgres:5432` · `rabbitmq:5672 · 15672` · `redis:6379`) — `expose` 면 LoadBalancer(k3s servicelb), 아니면 ClusterIP. 데이터는 노드 고정 폴더 `<dataDir>/<서비스>`(hostPath, 노드 1대 전제), 프로브는 옛 compose healthcheck 와 같은 명령 |
+| `templates/rabbitmq.yaml` 의 `rabbitmq-headless` | 파드 이름 `rabbitmq-0` 고정(노드 이름 `rabbit@rabbitmq-0` — 데이터를 다시 읽게) + 지표 포트 15692(밖으로 열지 않는다) |
+| `templates/rabbitmq-init.yaml` · `files/rabbitmq-init.sh` | 앱 계정 3개 · 권한 — Helm hook(post-install · post-upgrade) Job, 스크립트는 옛 `init.sh` 그대로(머리 주석 한 줄만 다르다) |
+| `templates/postgres-backup.yaml` | 백업 CronJob — 아래 |
+| `templates/_helpers.tpl` | 라벨 · Service 형태 · 노드 고정 폴더 볼륨 · Secret 키 env 조각 |
+
+- Redis 는 `redis-server` 를 첫 인자로 넘겨(이미지 진입점이 `/data` 소유자를 맞추고 redis 사용자로 실행) `--requirepass $(REDIS_PASSWORD)` 를 쿠버네티스가 env 로 채운다.
+- 비밀값은 Secret `deskless-infra`(`deskless.sh` 가 만든다)의 키로만 읽는다 — `POSTGRES_USER` · `POSTGRES_PASSWORD` · `POSTGRES_DB` · `RABBITMQ_USER` · `RABBITMQ_PASSWORD` · `RABBITMQ_GATEWAY_PASSWORD` · `RABBITMQ_USER_SERVICE_PASSWORD` · `RABBITMQ_ADMIN_SERVICE_PASSWORD` · `REDIS_PASSWORD`.
+
 ### PostgreSQL 백업
 
 - **하루 1번 전체 덤프 · 7일 보관**, 주기와 보관 일수는 `.env` 로 조절(사용자 결정 2026-11-23).
 - **같은 서버 안에만 쌓는 내부 복구용** — 잘못 지운 데이터 · 버그로 망가진 데이터를 되돌리기. 서버 밖(S3 등)으로 복사하지 않는다 — 서버 · 디스크가 망가지면 백업도 같이 사라진다(사용자가 알고 고른 범위).
+- CronJob `postgres-backup`(`timeZone: Asia/Seoul` · 한 번에 하나 · 지난 기록 3개) — 서버와 같은 이미지의 `pg_dump -Fc` 로 `<dataDir>/backups/postgres/<DB>-<YYYYMMDD-HHmm>.dump` 를 쓴다. 임시 이름(`.…part`)으로 다 쓴 뒤 바꾸고, 빈 파일이면 실패로 끝내며, 덤프가 성공했을 때만 보관 일수보다 오래된 덤프(`-mmin +일수×1440`)를 지운다.
+- 백업 폴더는 PostgreSQL 파드의 `/backup` 에 읽기 전용으로 붙어 있어 되돌리기(`pg_restore`)를 그 파드 안에서 한다(README "백업 · 되돌리기"). 지금 한 번은 `./deskless.sh infra backup`(CronJob 에서 Job 을 만들어 끝까지 기다린다).
 
 ## 클러스터 · 차트 · 실행 명령
 
 - **클러스터** — 로컬은 k3d(Docker Desktop 위 k3s), 운영은 리눅스 서버에 k3s 직접 설치(서버 1 ~ 3대). 같은 k3s 라 동작이 같다. 나중에 관리형(EKS)으로 옮겨도 차트는 그대로 — Ingress 종류 · 저장소 종류 이름은 `.env` 로 받는다. 클러스터 만들기는 저장소 파일이 아니다 — README 에 명령을 적고 사용자가 실행한다.
 - **차트** — Helm 차트 한 벌을 로컬 · 운영에 그대로 쓴다. 환경 차이(접속정보 · 비밀값 · 도메인 · 대수 · 여는 포트)는 그 PC · 서버의 `.env` 하나.
-- **실행 명령 하나** — `.env` → Secret → Helm 설치(옛 백엔드 `npm run docker:up` 자리), 로컬 · 운영 같은 명령. 잘못된 클러스터에 깔지 않게 `.env` 로 대상 클러스터를 정한다.
+- **실행 명령 하나** — `.env` → Secret → Helm 설치(옛 백엔드 `npm run docker:up` 자리), 로컬 · 운영 같은 명령. 잘못된 클러스터에 깔지 않게 `.env` 로 대상 클러스터를 정한다. 로컬 클러스터 만들기 명령(포트 · 데이터 볼륨)은 README.
+
+### 실행 명령 `deskless.sh`
+
+- `./deskless.sh <묶음> <동작>` — 지금 묶음은 `infra`(`up` · `status` · `backup` · `down`). 새 묶음(앱 · 프론트 · 모니터링)은 같은 스크립트에 하위 명령으로 더한다.
+- `.env` 는 `source` 하지 않고 `KEY=VALUE` 줄만 읽는다 — 빈 줄 · `#` 주석 무시, 줄 끝 CR 제거, 값을 감싼 따옴표 한 겹 제거, 값의 `$` · 공백은 그대로. 확인용으로 `DESKLESS_ENV_FILE` 에 다른 파일을 줄 수 있다.
+- 모든 `kubectl` · `helm` 은 `--context` · `--kube-context` 에 `.env` 의 `KUBE_CONTEXT` 를 붙여 부른다 — 비면 멈춘다. 필수 키가 비면 클러스터에 닿기 전에 멈춘다(옛 compose 의 `${VAR:?}` 와 같다).
+- Secret 은 그 묶음이 쓰는 키만 골라 임시 파일(`--from-env-file`, 끝나면 지움)로 만든다 — 명령 줄에 비밀번호를 남기지 않는다. 비밀이 아닌 환경 값(포트 열기 · 폴더 · 백업 주기 · 보관 일수)은 임시 values 파일로 넘긴다(쉼표가 든 cron 식도 그대로).
+- `up` 은 `helm upgrade --install … --wait --timeout 10m` — 파드 준비와 Helm hook(계정 Job)까지 기다린다. `down` 은 `helm uninstall` 만 — 노드 고정 폴더의 데이터 · 백업과 Secret 은 남는다.
+
+### 차트 규칙
+
+- 묶음마다 `charts/<묶음>/` — `Chart.yaml` · `values.yaml`(기본값 · 주석에 그 값을 바꾸는 `.env` 키) · `templates/`(공통 조각은 `_helpers.tpl`). 라벨 `app.kubernetes.io/name` · `app.kubernetes.io/part-of: deskless-<묶음>`.
+- 이미지는 패치 버전까지 고정한다. 옛 compose 에서 옮긴 리소스는 머리 주석에 원본(backend `3125886` 파일)을 적는다.
+- 리소스는 요청값만, 한도는 두지 않는다. Ingress 종류 · 저장소 종류 이름을 고정하지 않는다.
+- 확인은 `helm lint --strict charts/<묶음>` + `helm template` 을 로컬 값 · 운영 값으로 둘 다 — Service 형태 · 폴더 · Secret 참조 · hook 을 본다(클러스터에 닿지 않는다).
 - **로컬 개발** — 백엔드는 `npm run start:*` 로 PC 에서 띄우고, 인프라는 로컬 클러스터가 PC `localhost` 에 연 주소로 붙는다.
 
 ## 백엔드 · 프론트 구성과의 대응

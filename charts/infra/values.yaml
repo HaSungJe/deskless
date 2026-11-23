@@ -1,0 +1,35 @@
+# 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
+
+# Secret 이름 — ./deskless.sh 가 .env 의 비밀값으로 만든다(POSTGRES_* · RABBITMQ_* · REDIS_PASSWORD)
+secretName: deskless-infra
+
+# 밖(노드 포트)으로 열지 — INFRA_EXPOSE. true 면 Service 를 LoadBalancer(k3s 내장 servicelb)로 5432 · 5672 · 15672 · 6379 를 연다(로컬 k3d 가 PC 127.0.0.1 로 넘긴다). 운영은 false
+expose: false
+
+# 노드의 데이터 · 백업 폴더 — INFRA_DATA_DIR. 아래에 postgres · rabbitmq · redis · backups/postgres 를 만든다(노드 1대 전제)
+dataDir: /var/lib/deskless
+
+timeZone: Asia/Seoul
+
+postgres:
+    image: postgres:17.12-alpine
+    # 요청값만(자리 잡기용) — 한도는 두지 않는다(옛 compose 와 같다, 운영에서 메모리 부족으로 죽지 않게)
+    resources:
+        requests: {cpu: 100m, memory: 256Mi}
+    backup:
+        # 주기(cron 식, timeZone 기준) — POSTGRES_BACKUP_SCHEDULE
+        schedule: '0 3 * * *'
+        # 보관 일수 — POSTGRES_BACKUP_KEEP_DAYS
+        keepDays: 7
+
+rabbitmq:
+    image: rabbitmq:4.4.0-management-alpine
+    # 앱 계정 · 권한을 만드는 Job(files/rabbitmq-init.sh) 이미지
+    initImage: curlimages/curl:8.11.1
+    resources:
+        requests: {cpu: 100m, memory: 256Mi}
+
+redis:
+    image: redis:8.10.3-alpine
+    resources:
+        requests: {cpu: 50m, memory: 64Mi}

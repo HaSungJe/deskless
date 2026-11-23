@@ -1,0 +1,75 @@
+# PostgreSQL — 옛 compose.postgres.yml(backend 3125886) 그대로: 공식 이미지 · TZ · 데이터는 노드 고정 폴더
+# 계정 · 비밀번호(POSTGRES_*)는 데이터 폴더가 빌 때(첫 설치) 한 번만 적용된다 — 바꾸기는 README "비밀번호 바꾸기"
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    {{- include "infra.labels" "postgres" | nindent 4 }}
+spec:
+  type: {{ include "infra.serviceType" . }}
+  selector:
+    {{- include "infra.selector" "postgres" | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    {{- include "infra.labels" "postgres" | nindent 4 }}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "infra.selector" "postgres" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "infra.labels" "postgres" | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          env:
+            {{- include "infra.secretEnv" (dict "root" $ "name" "POSTGRES_USER" "key" "POSTGRES_USER") | nindent 12 }}
+            {{- include "infra.secretEnv" (dict "root" $ "name" "POSTGRES_PASSWORD" "key" "POSTGRES_PASSWORD") | nindent 12 }}
+            {{- include "infra.secretEnv" (dict "root" $ "name" "POSTGRES_DB" "key" "POSTGRES_DB") | nindent 12 }}
+            # 폴더 바로 아래가 아니라 하위 폴더 — 마운트 지점의 다른 파일과 섞이지 않게
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: TZ
+              value: {{ .Values.timeZone | quote }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ['sh', '-c', 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ['sh', '-c', 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            # 백업 폴더(읽기 전용) — 되돌릴 때 이 파드 안에서 pg_restore /backup/<파일> (README "백업 · 되돌리기")
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+      volumes:
+        {{- include "infra.hostPathVolume" (dict "root" $ "name" "data" "path" "postgres") | nindent 8 }}
+        {{- include "infra.hostPathVolume" (dict "root" $ "name" "backup" "path" "backups/postgres") | nindent 8 }}

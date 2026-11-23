@@ -1,0 +1,60 @@
+# PostgreSQL 백업 — 정해진 주기(기본 매일 03:00 한국 시각)에 전체 덤프, 보관 일수(기본 7일)보다 오래된 덤프를 지운다
+# 같은 서버 안에만 쌓는 내부 복구용(사용자 결정 2026-11-23) — 서버 밖 복사 없음. 지금 한 번: ./deskless.sh infra backup · 되돌리기: README
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    {{- include "infra.labels" "postgres-backup" | nindent 4 }}
+spec:
+  schedule: {{ .Values.postgres.backup.schedule | quote }}
+  timeZone: {{ .Values.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "infra.labels" "postgres-backup" | nindent 8 }}
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            {{- include "infra.labels" "postgres-backup" | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              # 서버와 같은 이미지 — pg_dump 버전이 서버와 같다
+              image: {{ .Values.postgres.image }}
+              env:
+                - name: PGHOST
+                  value: postgres
+                {{- include "infra.secretEnv" (dict "root" $ "name" "PGUSER" "key" "POSTGRES_USER") | nindent 16 }}
+                {{- include "infra.secretEnv" (dict "root" $ "name" "PGPASSWORD" "key" "POSTGRES_PASSWORD") | nindent 16 }}
+                {{- include "infra.secretEnv" (dict "root" $ "name" "PGDATABASE" "key" "POSTGRES_DB") | nindent 16 }}
+                - name: KEEP_DAYS
+                  value: {{ .Values.postgres.backup.keepDays | int | quote }}
+                - name: TZ
+                  value: {{ .Values.timeZone | quote }}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  dir=/backup
+                  name="$PGDATABASE-$(date +%Y%m%d-%H%M).dump"
+                  # 임시 이름으로 다 쓴 뒤 바꾼다 — 중간에 실패한 파일이 완성본처럼 남지 않게
+                  pg_dump -Fc -f "$dir/.$name.part"
+                  if [ ! -s "$dir/.$name.part" ]; then echo "백업 실패: 빈 파일" >&2; rm -f "$dir/.$name.part"; exit 1; fi
+                  mv "$dir/.$name.part" "$dir/$name"
+                  echo "백업: $dir/$name ($(du -h "$dir/$name" | cut -f1))"
+                  # 보관 일수보다 오래된 덤프 · 하루 넘게 남은 중간 파일 지우기(덤프가 성공했을 때만 여기까지 온다)
+                  find "$dir" -maxdepth 1 -type f -name '*.dump' -mmin +$((KEEP_DAYS * 1440)) -print -delete
+                  find "$dir" -maxdepth 1 -type f -name '.*.part' -mmin +1440 -delete
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            {{- include "infra.hostPathVolume" (dict "root" $ "name" "backup" "path" "backups/postgres") | nindent 12 }}

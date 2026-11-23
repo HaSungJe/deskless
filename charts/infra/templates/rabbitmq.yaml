@@ -1,0 +1,90 @@
+# RabbitMQ — 옛 compose.rabbitmq.yml(backend 3125886) 그대로: management 이미지 · 관리자 계정(관리 화면 · 계정 Job 전용 — 앱은 쓰지 않는다)
+# 노드 이름(rabbit@<호스트 이름>)이 바뀌면 데이터를 못 읽는다 — StatefulSet 파드 이름 rabbitmq-0 이 호스트 이름이라 고정된다(compose 의 hostname 고정과 같은 뜻)
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    {{- include "infra.labels" "rabbitmq" | nindent 4 }}
+spec:
+  type: {{ include "infra.serviceType" . }}
+  selector:
+    {{- include "infra.selector" "rabbitmq" | nindent 4 }}
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: management
+      port: 15672
+      targetPort: management
+---
+# 헤드리스 — 파드 이름 고정용 + 지표 포트(15692 — 모니터링이 긁는다, 밖으로 열지 않는다)
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  labels:
+    {{- include "infra.labels" "rabbitmq" | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "infra.selector" "rabbitmq" | nindent 4 }}
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: metrics
+      port: 15692
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  labels:
+    {{- include "infra.labels" "rabbitmq" | nindent 4 }}
+spec:
+  serviceName: rabbitmq-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "infra.selector" "rabbitmq" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "infra.labels" "rabbitmq" | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: rabbitmq
+          image: {{ .Values.rabbitmq.image }}
+          env:
+            {{- include "infra.secretEnv" (dict "root" $ "name" "RABBITMQ_DEFAULT_USER" "key" "RABBITMQ_USER") | nindent 12 }}
+            {{- include "infra.secretEnv" (dict "root" $ "name" "RABBITMQ_DEFAULT_PASS" "key" "RABBITMQ_PASSWORD") | nindent 12 }}
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+            - name: metrics
+              containerPort: 15692
+          readinessProbe:
+            exec:
+              command: ['rabbitmq-diagnostics', '-q', 'ping']
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ['rabbitmq-diagnostics', '-q', 'ping']
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.rabbitmq.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        {{- include "infra.hostPathVolume" (dict "root" $ "name" "data" "path" "rabbitmq") | nindent 8 }}

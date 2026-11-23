@@ -1,0 +1,8 @@
+# 인프라 차트 — PostgreSQL · RabbitMQ · Redis 를 파드 1개씩(옛 backend compose 와 같은 이미지 · 설정 — backend 3125886)
+# 설치 · 지우기는 ./deskless.sh infra up | down (.env → Secret → 이 차트). 규칙: docs/kubernetes.md
+apiVersion: v2
+name: deskless-infra
+description: deskless 인프라 — PostgreSQL · RabbitMQ(앱 계정 · 권한) · Redis · PostgreSQL 백업
+type: application
+version: 0.1.0
+appVersion: '1'
