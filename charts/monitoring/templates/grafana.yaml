@@ -1,0 +1,138 @@
+# Grafana — 옛 compose.monitoring.yml 의 grafana(backend 3125886) 그대로: 같은 이미지 · 관리자 계정 · 가입 · 익명 막기 · 한국 시각 · 한국어 화면 · 홈 = 서비스 부하
+# 데이터 원본 · 대시보드 2개를 파일로 미리 넣는다(files/grafana-*.yml · files/dashboards/*.json — 원본 docker/grafana/). 화면에서 고쳐도 파일이 원본이다
+# 관리자 비밀번호(GRAFANA_ADMIN_PASSWORD)는 데이터 폴더가 빌 때(첫 실행) 한 번만 적용된다 — 그 뒤 Secret 을 바꿔도 Grafana 계정은 그대로다
+# 노드 폴더 하나를 쓰므로 1대 · Recreate
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  labels:
+    {{- include "monitoring.labels" "grafana" | nindent 4 }}
+data:
+  datasources.yml: |-
+    {{- .Files.Get "files/grafana-datasource.yml" | nindent 4 }}
+  dashboards.yml: |-
+    {{- .Files.Get "files/grafana-dashboards.yml" | nindent 4 }}
+---
+# 대시보드 JSON(서비스 부하 · 인프라) — 원본 docker/grafana/dashboards/ 를 바이트 그대로 옮긴 files/dashboards/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  labels:
+    {{- include "monitoring.labels" "grafana" | nindent 4 }}
+data:
+  {{- (.Files.Glob "files/dashboards/*.json").AsConfig | nindent 2 }}
+---
+# 대시보드 — 클러스터 안 3001 → 파드 3000(노드 3000 은 게이트웨이 LoadBalancer 가 쓴다), expose 면 노드 3001(로컬 k3d 는 PC 127.0.0.1:13001)
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    {{- include "monitoring.labels" "grafana" | nindent 4 }}
+spec:
+  type: {{ include "monitoring.serviceType" . }}
+  selector:
+    {{- include "monitoring.selector" "grafana" | nindent 4 }}
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    {{- include "monitoring.labels" "grafana" | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "monitoring.selector" "grafana" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "monitoring.labels" "grafana" | nindent 8 }}
+      annotations:
+        # 데이터 원본 · 대시보드 파일이 바뀌거나(checksum) Secret 이 바뀌면(config-hash — ./deskless.sh 가 넘긴다) 다시 뜬다
+        checksum/config: {{ printf "%s\n%s\n%s" (.Files.Get "files/grafana-datasource.yml") (.Files.Get "files/grafana-dashboards.yml") ((.Files.Glob "files/dashboards/*.json").AsConfig) | sha256sum }}
+        deskless/config-hash: {{ .Values.configHash | quote }}
+    spec:
+      # Service 주소 env(GRAFANA_PORT 등)를 넣지 않는다 — 옛 compose 처럼 아래 설정 env 만
+      enableServiceLinks: false
+      initContainers:
+        # 노드 폴더는 root 소유로 만들어진다 — Grafana(472, 그룹 0)가 쓸 수 있게 소유자를 맞춘다(같은 이미지의 chown)
+        - name: data-owner
+          image: {{ .Values.grafana.image }}
+          securityContext:
+            runAsUser: 0
+          command: ['chown', '472:0', '/var/lib/grafana']
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+      containers:
+        - name: grafana
+          image: {{ .Values.grafana.image }}
+          env:
+            {{- include "monitoring.secretEnv" (dict "root" $ "name" "GF_SECURITY_ADMIN_USER" "key" "GRAFANA_ADMIN_USER") | nindent 12 }}
+            {{- include "monitoring.secretEnv" (dict "root" $ "name" "GF_SECURITY_ADMIN_PASSWORD" "key" "GRAFANA_ADMIN_PASSWORD") | nindent 12 }}
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: 'false'
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: 'false'
+            - name: GF_DATE_FORMATS_DEFAULT_TIMEZONE
+              value: {{ .Values.timeZone | quote }}
+            # 화면 한국어(개인 설정이 없는 사용자)
+            - name: GF_USERS_DEFAULT_LANGUAGE
+              value: 'ko-KR'
+            # 홈 = 서비스 부하
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /etc/grafana/dashboards/deskless-service-load.json
+            - name: TZ
+              value: {{ .Values.timeZone | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          # 첫 실행은 DB 를 만드느라 늦다 — 시작 확인(최대 5분) 뒤 준비됨 · 살아 있음
+          startupProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          volumeMounts:
+            # 데이터 원본(datasources/) · 대시보드 공급자(dashboards/) — 원본 docker/grafana/provisioning 과 같은 모양
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning
+              readOnly: true
+            # 대시보드 JSON — 공급자 경로 · 홈 경로가 가리키는 곳(데이터 폴더와 섞지 않게 /var/lib/grafana 밖)
+            - name: dashboards
+              mountPath: /etc/grafana/dashboards
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: provisioning
+          configMap:
+            name: grafana-provisioning
+            items:
+              - {key: datasources.yml, path: datasources/prometheus.yml}
+              - {key: dashboards.yml, path: dashboards/deskless.yml}
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        {{- include "monitoring.hostPathVolume" (dict "root" $ "name" "data" "path" "grafana") | nindent 8 }}

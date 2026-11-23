@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # deskless 실행 명령 — .env → Secret → Helm. 로컬 · 운영 같은 명령(docs/kubernetes.md)
 #
+#   (Windows) .\deskless setup   원클릭 설치 — 프로그램(winget) · 값 파일(deskless.cmd → scripts/deskless-windows.ps1, Git Bash 없이)
 #   ./deskless.sh up               전부 설치 · 갱신(원클릭) — 값 파일 · 필수 값 · 도구를 먼저 모두 확인하고, 로컬(k3d)이면 Docker 켜기 · 클러스터 만들기부터 끝까지. Windows 는 deskless.cmd(더블클릭 = up)
-#   ./deskless.sh status           전부 상태(인프라 · 백엔드)
+#   ./deskless.sh status           전부 상태(인프라 · 백엔드 · 프론트 · 모니터링)
 #   ./deskless.sh infra up         인프라 설치 · 갱신(PostgreSQL · RabbitMQ 앱 계정 · Redis · PostgreSQL 백업)
 #   ./deskless.sh infra status     파드 · Service · 마지막 백업
 #   ./deskless.sh infra backup     지금 PostgreSQL 백업 한 번
@@ -11,8 +12,15 @@
 #   ./deskless.sh backend status   앱 · 대수 · 자동 증설(HPA) 상태
 #   ./deskless.sh backend migrate  마이그레이션만 한 번
 #   ./deskless.sh backend down     백엔드 앱 지우기 — 공용 파일 · Secret · 설정은 남는다
+#   ./deskless.sh web up           프론트 — 이미지 빌드(공개 주소를 박는다) · 로컬 클러스터에 넣기 · 설치(자동 증설)
+#   ./deskless.sh web status       프론트 · 대수 · 자동 증설(HPA) 상태
+#   ./deskless.sh web down         프론트 지우기 — Secret · 설정은 남는다
+#   ./deskless.sh monitoring up    모니터링 — Prometheus · Grafana · PostgreSQL · Redis 수집기
+#   ./deskless.sh monitoring status 모니터링 파드 · 주소
+#   ./deskless.sh monitoring down  모니터링 지우기 — 지표 · 대시보드 데이터(노드의 INFRA_DATA_DIR)와 Secret 은 남는다
 #
-# 값은 두 파일에서 읽는다 — .env(클러스터 · 인프라 · 대수 · 공개 주소) · backend/.env(백엔드 앱 값 — deskless 가 받아 둔 backend/ 사본에 두는 클러스터용 파일, backend/.env.example 복사).
+# 값은 세 파일에서 읽는다 — .env(클러스터 · 인프라 · 대수 · 공개 주소 · 모니터링) · backend/.env(백엔드 앱 값) · frontend/.env.production(없으면 frontend/.env — 프론트 값).
+# 백엔드 · 프론트 값 파일은 deskless 가 받아 둔 사본에 두는 클러스터용 파일이다(각 .env.example 복사 — 작업 폴더의 .env 와 따로).
 # 모든 명령은 .env 의 KUBE_CONTEXT 클러스터에만 닿는다(비면 멈춘다). Windows 는 deskless.cmd(Git Bash 로 실행 — PowerShell 에서 .deskless up), 서버는 bash 로 실행한다.
 set -euo pipefail
 
@@ -21,9 +29,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${DESKLESS_ENV_FILE:-$ROOT/.env}"
 BACKEND_ENV_FILE="${DESKLESS_BACKEND_ENV_FILE:-$ROOT/backend/.env}"
 NAMESPACE=deskless
-# 로컬 k3d 클러스터 — 데이터 볼륨(클러스터를 지워도 남는다) · 쿠버네티스 API 포트(PC 127.0.0.1 에만)
-LOCAL_DATA_VOLUME=deskless-infra-data
-LOCAL_API_PORT=6550
+# PC · 사용자마다 다를 수 있는 값(경로 · PC 포트 · 볼륨 이름 · k3s 인자 · 기다리는 시간)은 여기 고정하지 않고 .env 에서 읽는다
+# — 다른 PC 도 .env 만 고쳐 같은 실행 · 확인을 한다(사용자 결정 2026-11-24, .env.example 의 "이 PC" 절)
+LOCAL_PORT_KEYS=(LOCAL_GATEWAY_PORT LOCAL_WEB_PORT LOCAL_POSTGRES_PORT LOCAL_RABBITMQ_PORT LOCAL_RABBITMQ_ADMIN_PORT LOCAL_REDIS_PORT LOCAL_GRAFANA_PORT LOCAL_PROMETHEUS_PORT LOCAL_API_PORT)
 INFRA_RELEASE=deskless-infra
 INFRA_SECRET=deskless-infra
 # Secret 에 넣는 키 — 차트(charts/infra)가 읽는 비밀값만. 인프라 계정은 .env, 브로커 앱 계정은 앱이 쓰는 값 그대로 backend/.env 에서
@@ -42,9 +50,24 @@ BACKEND_SECRET_OPTIONAL=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TOSS_SECRET_KEY
 BACKEND_CLUSTER_KEYS=(DATABASE_URL REDIS_URL RABBITMQ_HOST RABBITMQ_PORT RABBITMQ_USER RABBITMQ_PASSWORD GATEWAY_PORT USER_SERVICE_PORT ADMIN_SERVICE_PORT USER_SERVICE_HOST ADMIN_SERVICE_HOST USER_SERVICE_URL ADMIN_SERVICE_URL GATEWAY_PUBLIC_URL CORS_ORIGINS USER_WEB_URL GATEWAY_INSTANCE_ID FILE_STORAGE_DIR METRICS_HOST GATEWAY_METRICS_PORT USER_SERVICE_METRICS_PORT ADMIN_SERVICE_METRICS_PORT SCHEDULER_METRICS_PORT TZ)
 # 그 밖의 backend/.env 키는 모두 설정(ConfigMap)으로 넘긴다 — 백엔드 키 목록을 여기 다시 적지 않는다
 
-declare -A ENV=() BENV=()
+WEB_RELEASE=deskless-web
+WEB_SECRET=deskless-web
+WEB_CONFIG=deskless-web-env
+# 프론트 비밀값(실행 때 서버만 쓴다 — 차트 values.yaml 의 secretKeys 와 같게) — 필수 · 비어도 되는 것(비면 그 로그인 · 결제만 꺼진다)
+WEB_SECRET_REQUIRED=(NEXTAUTH_SECRET)
+WEB_SECRET_OPTIONAL=(KAKAO_LOGIN_SECRET_ID NAVER_LOGIN_SECRET_ID TOSS_SECRET_KEY)
+# 프론트 값 파일에 있어도 쓰지 않는 키 — 공개 주소는 .env, 포트 · 바인딩 · 지표 · 서버 안 게이트웨이 주소는 차트가 정한다
+WEB_CLUSTER_KEYS=(NEXT_PUBLIC_API_URL NEXT_PUBLIC_SERVER_URL NEXTAUTH_URL API_INTERNAL_URL PORT HOSTNAME METRICS_PORT METRICS_HOST TZ)
+# 빌드에만 쓰는 키(코드에 박힌다 — 실행 값으로는 넘기지 않는다): NEXT_PUBLIC_* · NEXT_IMAGE_*
+
+MONITORING_RELEASE=deskless-monitoring
+MONITORING_SECRET=deskless-monitoring
+
+declare -A ENV=() BENV=() FENV=()
 BENV_LOADED=''
-TMP=''
+FENV_FILE=''
+# 이 명령의 임시 폴더 — 이름을 TMP 로 두지 않는다(Git Bash 가 내보내는 TMP 를 덮으면 k3d · docker 등 Windows 프로그램의 임시 폴더가 비어 C: 에 쓰려다 거부된다)
+WORK_DIR=''
 
 # 사용법 — 파일 머리 주석
 usage() {
@@ -95,6 +118,59 @@ load_backend_env() {
     BENV_LOADED=1
 }
 
+# 프론트 값 파일 — frontend/.env.production, 없으면 frontend/.env(확인용으로 DESKLESS_FRONTEND_ENV_FILE). 없으면 빈 문자열
+frontend_env_file() {
+    if [ -n "${DESKLESS_FRONTEND_ENV_FILE:-}" ]; then
+        printf '%s' "$DESKLESS_FRONTEND_ENV_FILE"
+    elif [ -f "$ROOT/frontend/.env.production" ]; then
+        printf '%s' "$ROOT/frontend/.env.production"
+    elif [ -f "$ROOT/frontend/.env" ]; then
+        printf '%s' "$ROOT/frontend/.env"
+    fi
+}
+
+# 프론트 값 파일 읽기(프론트 값이 필요한 명령만)
+load_frontend_env() {
+    [ -n "$FENV_FILE" ] && return 0
+    FENV_FILE="$(frontend_env_file)"
+    [ -n "$FENV_FILE" ] && [ -f "$FENV_FILE" ] || die "frontend/.env.production(없으면 frontend/.env)이 없습니다 — frontend/.env.example 을 복사하고 NEXTAUTH_SECRET 을 채우세요(만들기: openssl rand -base64 32)"
+    read_env_file "$FENV_FILE" FENV
+}
+
+# 프론트 값 파일 필수 키 — 하나라도 비면 멈춘다
+require_frontend() {
+    local k
+    for k in "$@"; do
+        [ -n "${FENV[$k]:-}" ] || die "${FENV_FILE#"$ROOT"/} 에 $k 가 필요합니다(frontend/.env.example 참고$([ "$k" = NEXTAUTH_SECRET ] && echo ' — 만들기: openssl rand -base64 32'))"
+    done
+}
+
+# 프론트 키 중 차트 · .env 가 정하거나 비밀값으로 넘기는 키인지
+web_known_key() {
+    local v
+    for v in "${WEB_SECRET_REQUIRED[@]}" "${WEB_SECRET_OPTIONAL[@]}" "${WEB_CLUSTER_KEYS[@]}"; do
+        [ "$v" = "$1" ] && return 0
+    done
+    return 1
+}
+
+# 빌드에만 쓰는 프론트 키(NEXT_PUBLIC_* · NEXT_IMAGE_*) — 코드에 박히는 공개 값이라 실행 값 · 비밀값 검사에서 뺀다
+web_build_only_key() {
+    [[ "$1" == NEXT_PUBLIC_* || "$1" == NEXT_IMAGE_* ]]
+}
+
+# 프론트 값 파일에서 비밀값 같은 이름인데 deskless.sh 가 모르는 키(한 줄에 하나)
+unknown_web_secret_keys() {
+    local k
+    for k in "${!FENV[@]}"; do
+        web_known_key "$k" && continue
+        web_build_only_key "$k" && continue
+        case "$k" in
+            *PASSWORD* | *SECRET* | *TOKEN* | *_KEY | *_KEY_* | *_CODE) echo "$k" ;;
+        esac
+    done
+}
+
 # backend/.env 필수 키 — 하나라도 비면 멈춘다
 require_backend() {
     local k
@@ -140,9 +216,12 @@ require() {
 # Windows(Git Bash) — winget 으로 막 설치해 아직 PATH 에 없는 k3d · helm, Docker Desktop 의 docker · kubectl 을 찾아 PATH 에 더한다(터미널을 다시 열지 않아도 되게)
 add_windows_tool_paths() {
     [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath > /dev/null 2>&1 || return 0
-    local base f
+    local base f candidates=()
     base="$(cygpath -u "$LOCALAPPDATA")/Microsoft/WinGet"
-    for f in "$base"/Links/*.exe "$base"/Packages/*/k3d.exe "$base"/Packages/*/*/helm.exe "/c/Program Files/Docker/Docker/resources/bin/docker.exe"; do
+    candidates=("$base"/Links/*.exe "$base"/Packages/*/k3d.exe "$base"/Packages/*/*/helm.exe)
+    # Docker Desktop 의 docker · kubectl — .env 의 DOCKER_DESKTOP_EXE 옆 resources/bin
+    [ -n "${ENV[DOCKER_DESKTOP_EXE]:-}" ] && candidates+=("$(dirname "$(cygpath -u "${ENV[DOCKER_DESKTOP_EXE]}")")/resources/bin/docker.exe")
+    for f in "${candidates[@]}"; do
         [ -f "$f" ] || continue
         case ":$PATH:" in
             *":$(dirname "$f"):"*) ;;
@@ -157,7 +236,7 @@ need_tools() {
     for t in "$@"; do
         command -v "$t" > /dev/null 2>&1 && continue
         add_windows_tool_paths
-        command -v "$t" > /dev/null 2>&1 || die "$t 가 없습니다 — 설치한 뒤 다시 실행하세요(README '준비')"
+        command -v "$t" > /dev/null 2>&1 || die "$t 가 없습니다 — 설치한 뒤 다시 실행하세요(README '설치' — Windows 는 .\deskless setup)"
     done
 }
 
@@ -197,10 +276,10 @@ urlencode() {
 
 # 임시 폴더 — 끝나면 지운다(비밀값이 든 파일을 남기지 않는다). up 처럼 여러 묶음을 이어 돌려도 하나만 쓴다
 make_tmp() {
-    [ -n "$TMP" ] && return 0
+    [ -n "$WORK_DIR" ] && return 0
     umask 077
-    TMP="$(mktemp -d)"
-    trap 'rm -rf "$TMP"' EXIT
+    WORK_DIR="$(mktemp -d)"
+    trap 'rm -rf "$WORK_DIR"' EXIT
 }
 
 # 대상 클러스터를 정해 kubectl · helm 을 부른다 — KUBE_CONTEXT 밖으로는 닿지 않는다
@@ -224,10 +303,19 @@ apply_env_object() {
     kube -n "$NAMESPACE" create "$kind" "${sub[@]}" "$name" --from-env-file="$file" --dry-run=client -o yaml | kube apply -f -
 }
 
-# Job 이 끝날 때까지 기다린다(최대 10분) — 실패하면 로그를 보여 주고 멈춘다
+# 설치 · 작업을 기다리는 시간(분) — .env 의 WAIT_TIMEOUT_MINUTES(느린 PC 는 늘린다)
+wait_minutes() {
+    local m
+    m="$(env_get WAIT_TIMEOUT_MINUTES)"
+    require_int WAIT_TIMEOUT_MINUTES "${m:-x}"
+    printf '%s' "$m"
+}
+
+# Job 이 끝날 때까지 기다린다(최대 WAIT_TIMEOUT_MINUTES 분) — 실패하면 로그를 보여 주고 멈춘다
 wait_job() {
-    local job="$1" what="$2" i ok='' failed=''
-    for i in $(seq 1 200); do
+    local job="$1" what="$2" i ok='' failed='' minutes
+    minutes="$(wait_minutes)"
+    for i in $(seq 1 $((minutes * 20))); do
         ok="$(kube -n "$NAMESPACE" get job "$job" -o 'jsonpath={.status.succeeded}' 2> /dev/null || true)"
         failed="$(kube -n "$NAMESPACE" get job "$job" -o 'jsonpath={.status.failed}' 2> /dev/null || true)"
         [ "${ok:-0}" -ge 1 ] && break
@@ -237,7 +325,7 @@ wait_job() {
         fi
         sleep 3
     done
-    [ "${ok:-0}" -ge 1 ] || die "$what 이 10분 안에 끝나지 않았습니다 — kubectl -n $NAMESPACE logs job/$job"
+    [ "${ok:-0}" -ge 1 ] || die "$what 이 ${minutes}분 안에 끝나지 않았습니다 — kubectl -n $NAMESPACE logs job/$job"
     kube -n "$NAMESPACE" logs "job/$job"
 }
 
@@ -256,7 +344,7 @@ infra_up() {
     make_tmp
 
     # Secret 은 쓰는 키만 골라 파일로 넘긴다(명령 줄에 비밀번호를 남기지 않는다)
-    local secret_file="$TMP/infra.env" values_file="$TMP/values.yaml" k
+    local secret_file="$WORK_DIR/infra.env" values_file="$WORK_DIR/values.yaml" k
     {
         for k in "${INFRA_SECRET_KEYS[@]}"; do
             printf '%s=%s\n' "$k" "${ENV[$k]}"
@@ -276,12 +364,18 @@ infra_up() {
     ensure_namespace
     step "Secret $INFRA_SECRET (.env 의 비밀값 ${#INFRA_SECRET_KEYS[@]}개 + backend/.env 의 브로커 앱 계정 ${#BROKER_APP_KEYS[@]}개)"
     apply_env_object secret "$INFRA_SECRET" "$secret_file"
-    step "Helm $INFRA_RELEASE — 준비될 때까지 기다린다(최대 10분, RabbitMQ 계정 작업 포함)"
-    helm_ctx upgrade --install "$INFRA_RELEASE" "$ROOT/charts/infra" -n "$NAMESPACE" -f "$values_file" --wait --timeout 10m
+    step "Helm $INFRA_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분, RabbitMQ 계정 작업 포함)"
+    helm_ctx upgrade --install "$INFRA_RELEASE" "$ROOT/charts/infra" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
     echo "✓ 인프라 설치 — 상태: ./deskless.sh infra status"
     if [ "$expose" = true ]; then
-        echo "  PC 에서: PostgreSQL localhost:5432 · RabbitMQ localhost:5672(관리 화면 http://localhost:15672) · Redis localhost:6379"
+        echo "  PC 에서: $(infra_addresses)"
     fi
+}
+
+# PC 에서 닿는 인프라 주소(.env 의 LOCAL_*_PORT)
+infra_addresses() {
+    printf 'PostgreSQL localhost:%s · RabbitMQ localhost:%s(관리 화면 http://localhost:%s) · Redis localhost:%s' \
+        "$(env_get LOCAL_POSTGRES_PORT)" "$(env_get LOCAL_RABBITMQ_PORT)" "$(env_get LOCAL_RABBITMQ_ADMIN_PORT)" "$(env_get LOCAL_REDIS_PORT)"
 }
 
 # 인프라 상태
@@ -355,9 +449,11 @@ backend_images() {
 
 # 백엔드 설치 · 갱신 — 마이그레이션(Helm hook)이 앱보다 먼저 돈다
 backend_up() {
-    require KUBE_CONTEXT GATEWAY_PUBLIC_URL WEB_PUBLIC_URL
-    # 브라우저가 닿는 공개 주소(끝의 / 는 뗀다) — backend/.env 의 같은 키(PC 실행용)는 쓰지 않는다
-    local gw_url="${ENV[GATEWAY_PUBLIC_URL]%/}" web_url="${ENV[WEB_PUBLIC_URL]%/}"
+    require KUBE_CONTEXT
+    # 브라우저가 닿는 공개 주소 — backend/.env 의 같은 키(PC 실행용)는 쓰지 않는다
+    local gw_url web_url
+    gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
+    web_url="$(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT)"
     load_backend_env
     require_backend "${BACKEND_SECRET_REQUIRED[@]}"
     # 비밀값 같은 이름인데 모르는 키는 설정(ConfigMap)으로 넘기지 않고 멈춘다 — 백엔드가 비밀값을 더했으면 위 목록과 차트 secretKeys 에 넣는다
@@ -400,7 +496,7 @@ backend_up() {
     make_tmp
 
     # Secret — 앱이 쓰는 비밀값(어느 앱이 무엇을 받는지는 차트 values.yaml 의 secretKeys)
-    local secret_file="$TMP/backend.env" config_file="$TMP/backend-config.env" values_file="$TMP/values.yaml"
+    local secret_file="$WORK_DIR/backend.env" config_file="$WORK_DIR/backend-config.env" values_file="$WORK_DIR/values.yaml"
     {
         printf 'DATABASE_URL=%s\nREDIS_URL=%s\n' "$db_url" "$redis_url"
         for k in "${BACKEND_SECRET_REQUIRED[@]}" "${BACKEND_SECRET_OPTIONAL[@]}"; do
@@ -440,8 +536,8 @@ backend_up() {
     step "Secret $BACKEND_SECRET · ConfigMap $BACKEND_CONFIG"
     apply_env_object secret "$BACKEND_SECRET" "$secret_file"
     apply_env_object configmap "$BACKEND_CONFIG" "$config_file"
-    step "Helm $BACKEND_RELEASE — 마이그레이션 먼저, 앱이 준비될 때까지 기다린다(최대 15분)"
-    helm_ctx upgrade --install "$BACKEND_RELEASE" "$ROOT/charts/backend" -n "$NAMESPACE" -f "$values_file" --wait --timeout 15m
+    step "Helm $BACKEND_RELEASE — 마이그레이션 먼저, 앱이 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    helm_ctx upgrade --install "$BACKEND_RELEASE" "$ROOT/charts/backend" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
     echo "✓ 백엔드 설치 — 상태: ./deskless.sh backend status"
     echo "  게이트웨이 $gw_url · Swagger $gw_url/${BENV[SWAGGER_PATH]:-swagger}"
 }
@@ -480,6 +576,183 @@ backend_down() {
     echo "✓ 백엔드를 지웠다 — 공용 파일(노드의 $(env_get INFRA_DATA_DIR /var/lib/deskless)/files)과 Secret $BACKEND_SECRET · ConfigMap $BACKEND_CONFIG 은 남는다"
 }
 
+# ── web(프론트) ─────────────────────────────
+
+# 프론트 설치 · 갱신 — 빌드 값(공개 주소를 박는다)으로 이미지 → 로컬 클러스터에 넣기 → Secret · ConfigMap → Helm
+web_up() {
+    require KUBE_CONTEXT
+    local gw_url web_url k
+    gw_url="$(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)"
+    web_url="$(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT)"
+    load_frontend_env
+    require_frontend "${WEB_SECRET_REQUIRED[@]}"
+    for k in $(unknown_web_secret_keys); do
+        die "${FENV_FILE#"$ROOT"/} 의 $k 는 비밀값 같은데 deskless.sh 가 모르는 키입니다 — WEB_SECRET_* 와 charts/web/values.yaml 의 secretKeys 에 넣으세요(설정 ConfigMap 으로는 넘기지 않는다)"
+    done
+    local min max percent
+    min="$(env_get WEB_REPLICAS_MIN 2)"
+    max="$(env_get WEB_REPLICAS_MAX 4)"
+    require_int WEB_REPLICAS_MIN "$min"
+    require_int WEB_REPLICAS_MAX "$max"
+    [ "$min" -le "$max" ] || die "WEB_REPLICAS_MIN($min)이 WEB_REPLICAS_MAX($max)보다 큽니다"
+    percent="$(env_get AUTOSCALE_CPU_PERCENT 70)"
+    require_int AUTOSCALE_CPU_PERCENT "$percent"
+    need_tools git docker kubectl helm k3d
+    [ -f "$ROOT/frontend/Dockerfile" ] || die "frontend/ 가 비어 있습니다 — git submodule update --init"
+    [[ "${ENV[KUBE_CONTEXT]}" == k3d-* ]] || die "로컬 k3d 클러스터(KUBE_CONTEXT=k3d-…)가 아니면 레지스트리 이미지가 필요합니다 — 로드맵 Phase 8 운영 준비"
+    make_tmp
+
+    # 빌드 값 — 프론트 값 파일 그대로(따옴표 · 주석 유지) + 공개 주소 3개를 .env 의 값으로 바꾼다(NEXT_PUBLIC_* 는 빌드 때 박힌다)
+    local build_env="$WORK_DIR/web-build.env" secret_file="$WORK_DIR/web.env" config_file="$WORK_DIR/web-config.env" values_file="$WORK_DIR/web-values.yaml" build_src tag
+    grep -vE '^[[:space:]]*(NEXT_PUBLIC_API_URL|NEXT_PUBLIC_SERVER_URL|NEXTAUTH_URL)[[:space:]]*=' "$FENV_FILE" > "$build_env" || true
+    printf '\n# deskless 공개 주소(.env)\nNEXT_PUBLIC_API_URL=%s\nNEXT_PUBLIC_SERVER_URL=%s\nNEXTAUTH_URL=%s\n' "$gw_url" "$web_url" "$web_url" >> "$build_env"
+    # 태그 = frontend/ 커밋 + 빌드 값 해시 — 빌드 값(공개 주소 · NEXT_PUBLIC_*)이 바뀌면 다시 빌드한다
+    tag="$(git -C "$ROOT/frontend" rev-parse --short HEAD)-$(sha256sum "$build_env" | cut -c1-8)"
+    # Secret — 서버만 쓰는 비밀값
+    {
+        for k in "${WEB_SECRET_REQUIRED[@]}" "${WEB_SECRET_OPTIONAL[@]}"; do
+            printf '%s=%s\n' "$k" "${FENV[$k]:-}"
+        done
+    } > "$secret_file"
+    # ConfigMap — 실행 값(빌드 전용 · 비밀값 · 차트가 정하는 키 빼고) + 공개 주소
+    {
+        while IFS= read -r k; do
+            [ -n "$k" ] || continue
+            web_known_key "$k" && continue
+            web_build_only_key "$k" && continue
+            printf '%s=%s\n' "$k" "${FENV[$k]}"
+        done < <(printf '%s\n' "${!FENV[@]}" | LC_ALL=C sort)
+        printf 'NEXTAUTH_URL=%s\n' "$web_url"
+    } > "$config_file"
+    {
+        printf 'imageTag: %s\n' "$(yaml_str "$tag")"
+        printf 'configHash: %s\n' "$(yaml_str "$(cat "$secret_file" "$config_file" | sha256sum | cut -c1-16)")"
+        printf 'autoscale:\n  cpuPercent: %s\n' "$percent"
+        printf 'web:\n  replicasMin: %s\n  replicasMax: %s\n  expose: %s\n  host: %s\n  ingressClass: %s\n  tlsSecret: %s\n' \
+            "$min" "$max" "$(truthy "$(env_get WEB_EXPOSE 0)")" "$(yaml_str "$(env_get WEB_HOST)")" "$(yaml_str "$(env_get INGRESS_CLASS)")" "$(yaml_str "$(env_get WEB_TLS_SECRET)")"
+    } > "$values_file"
+
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 이미지 태그: $tag(frontend/ 커밋-빌드 값) · 값 파일: ${FENV_FILE#"$ROOT"/}"
+    echo "  web $min ~ ${max}대$([ "$min" -lt "$max" ] && echo " — 자동 증설(CPU 코어 1개의 $percent%)")"
+    if docker image inspect "deskless/web:$tag" > /dev/null 2>&1; then
+        step "이미지 deskless/web:$tag — 이미 있다(빌드 건너뜀)"
+    else
+        step "이미지 deskless/web:$tag 빌드 — 빌드 값은 BuildKit secret(dotenv)으로만 넘긴다(이미지에 남지 않는다)"
+        build_src="$build_env"
+        command -v cygpath > /dev/null 2>&1 && build_src="$(cygpath -w "$build_env")"
+        DOCKER_BUILDKIT=1 docker build --secret "id=dotenv,src=$build_src" -t "deskless/web:$tag" "$ROOT/frontend"
+    fi
+    step "로컬 클러스터 ${ENV[KUBE_CONTEXT]#k3d-} 에 이미지 넣기"
+    k3d image import "deskless/web:$tag" -c "${ENV[KUBE_CONTEXT]#k3d-}"
+    ensure_namespace
+    step "Secret $WEB_SECRET · ConfigMap $WEB_CONFIG"
+    apply_env_object secret "$WEB_SECRET" "$secret_file"
+    apply_env_object configmap "$WEB_CONFIG" "$config_file"
+    step "Helm $WEB_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    helm_ctx upgrade --install "$WEB_RELEASE" "$ROOT/charts/web" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
+    echo "✓ 프론트 설치 — 상태: ./deskless.sh web status"
+    echo "  웹 $web_url"
+}
+
+# 프론트 상태 — 파드 · 대수 · 자동 증설
+web_status() {
+    require KUBE_CONTEXT
+    need_tools kubectl helm
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE"
+    helm_ctx status "$WEB_RELEASE" -n "$NAMESPACE" 2> /dev/null | sed -n '1,4p' || echo "(설치 안 됨 — ./deskless.sh web up)"
+    echo
+    kube -n "$NAMESPACE" get deployment,pod,service -l app.kubernetes.io/part-of=deskless-web
+    echo
+    echo "자동 증설(HPA) — 지금 사용률 / 목표 · 최소 ~ 최대 · 지금 대수:"
+    kube -n "$NAMESPACE" get hpa -l app.kubernetes.io/part-of=deskless-web 2> /dev/null || echo "(자동 증설 없음)"
+}
+
+# 프론트 지우기 — Secret · ConfigMap 은 남긴다
+web_down() {
+    require KUBE_CONTEXT
+    need_tools helm
+    step "Helm $WEB_RELEASE 지우기"
+    helm_ctx uninstall "$WEB_RELEASE" -n "$NAMESPACE" --wait
+    echo "✓ 프론트를 지웠다 — Secret $WEB_SECRET · ConfigMap $WEB_CONFIG 은 남는다"
+}
+
+# ── monitoring ──────────────────────────────
+
+# 모니터링 설치 · 갱신 — Prometheus · Grafana · PostgreSQL · Redis 수집기(옛 backend compose.monitoring.yml)
+monitoring_up() {
+    require KUBE_CONTEXT GRAFANA_ADMIN_PASSWORD
+    # 수집기가 붙을 DB · Redis — .env 에 있으면 그대로(관리형), 없으면 인프라 계정으로 만든다
+    local dsn redis_addr redis_password='' expose retention
+    if [ -n "${ENV[DATABASE_URL]:-}" ]; then
+        # postgres-exporter(lib/pq)는 schema 파라미터를 모른다 — 뺀다
+        dsn="$(printf '%s' "${ENV[DATABASE_URL]}" | sed -E 's/([?&])schema=[^&]*&?/\1/; s/[?&]$//')"
+    else
+        require POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+        dsn="postgresql://$(urlencode "${ENV[POSTGRES_USER]}"):$(urlencode "${ENV[POSTGRES_PASSWORD]}")@postgres:5432/$(urlencode "${ENV[POSTGRES_DB]}")?sslmode=disable"
+    fi
+    if [ -n "${ENV[REDIS_URL]:-}" ]; then
+        redis_addr="${ENV[REDIS_URL]}"
+    else
+        require REDIS_PASSWORD
+        redis_addr="redis://redis:6379"
+        redis_password="${ENV[REDIS_PASSWORD]}"
+    fi
+    expose="$(truthy "$(env_get MONITORING_EXPOSE 0)")"
+    retention="$(env_get PROMETHEUS_RETENTION 30d)"
+    need_tools kubectl helm
+    make_tmp
+    local secret_file="$WORK_DIR/monitoring.env" values_file="$WORK_DIR/monitoring-values.yaml"
+    {
+        printf 'GRAFANA_ADMIN_USER=%s\nGRAFANA_ADMIN_PASSWORD=%s\n' "$(env_get GRAFANA_ADMIN_USER admin)" "${ENV[GRAFANA_ADMIN_PASSWORD]}"
+        printf 'DATA_SOURCE_NAME=%s\nREDIS_ADDR=%s\nREDIS_PASSWORD=%s\n' "$dsn" "$redis_addr" "$redis_password"
+    } > "$secret_file"
+    {
+        printf 'dataDir: %s\n' "$(yaml_str "$(env_get INFRA_DATA_DIR /var/lib/deskless)")"
+        printf 'expose: %s\n' "$expose"
+        printf 'configHash: %s\n' "$(yaml_str "$(sha256sum "$secret_file" | cut -c1-16)")"
+        printf 'prometheus:\n  retention: %s\n' "$(yaml_str "$retention")"
+    } > "$values_file"
+
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE · 밖으로 열기: $expose · 지표 보관: $retention"
+    ensure_namespace
+    step "Secret $MONITORING_SECRET (Grafana 관리자 · 수집기 접속)"
+    apply_env_object secret "$MONITORING_SECRET" "$secret_file"
+    step "Helm $MONITORING_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분)"
+    helm_ctx upgrade --install "$MONITORING_RELEASE" "$ROOT/charts/monitoring" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
+    echo "✓ 모니터링 설치 — 상태: ./deskless.sh monitoring status"
+    monitoring_addresses "$expose"
+}
+
+# 모니터링 주소 안내 — 로컬로 열었으면 PC 주소, 아니면 port-forward 명령
+monitoring_addresses() {
+    if [ "$1" = true ] && is_local; then
+        echo "  Grafana http://localhost:$(env_get LOCAL_GRAFANA_PORT) (관리자 $(env_get GRAFANA_ADMIN_USER admin) / .env 의 GRAFANA_ADMIN_PASSWORD) · Prometheus http://localhost:$(env_get LOCAL_PROMETHEUS_PORT)"
+    else
+        echo "  Grafana: kubectl --context ${ENV[KUBE_CONTEXT]} -n $NAMESPACE port-forward svc/grafana $(env_get LOCAL_GRAFANA_PORT):3001 → http://localhost:$(env_get LOCAL_GRAFANA_PORT)"
+    fi
+}
+
+# 모니터링 상태
+monitoring_status() {
+    require KUBE_CONTEXT
+    need_tools kubectl helm
+    echo "클러스터: ${ENV[KUBE_CONTEXT]} · 네임스페이스: $NAMESPACE"
+    helm_ctx status "$MONITORING_RELEASE" -n "$NAMESPACE" 2> /dev/null | sed -n '1,4p' || echo "(설치 안 됨 — ./deskless.sh monitoring up)"
+    echo
+    kube -n "$NAMESPACE" get deployment,pod,service -l app.kubernetes.io/part-of=deskless-monitoring
+    echo
+    monitoring_addresses "$(truthy "$(env_get MONITORING_EXPOSE 0)")"
+}
+
+# 모니터링 지우기 — 지표 · 대시보드 데이터(노드 폴더)와 Secret 은 남긴다
+monitoring_down() {
+    require KUBE_CONTEXT
+    need_tools helm
+    step "Helm $MONITORING_RELEASE 지우기"
+    helm_ctx uninstall "$MONITORING_RELEASE" -n "$NAMESPACE" --wait
+    echo "✓ 모니터링을 지웠다 — 지표 · 대시보드 데이터(노드의 $(env_get INFRA_DATA_DIR /var/lib/deskless))와 Secret $MONITORING_SECRET 은 남는다"
+}
+
 # ── 전부(원클릭) ────────────────────────────
 
 # 로컬 k3d 클러스터인지(KUBE_CONTEXT=k3d-<이름>)
@@ -487,12 +760,42 @@ is_local() {
     [[ "${ENV[KUBE_CONTEXT]:-}" == k3d-* ]]
 }
 
-# 주소의 포트(없으면 두 번째 인자) — http://localhost:13000 → 13000
+# 공개 주소(끝 / 뗌) — .env 의 값, 비었으면 로컬(k3d)은 http://localhost:<그 PC 포트>(포트를 두 번 적지 않는다), 운영은 멈춘다
+#   public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT
+public_url() {
+    local key="$1" port_key="$2" v="${ENV[$1]:-}"
+    if [ -n "$v" ]; then
+        printf '%s' "${v%/}"
+        return 0
+    fi
+    is_local || die ".env 에 $key 가 필요합니다 — 운영은 공개 도메인(예: https://api.<도메인> · https://<도메인>)"
+    [ -n "${ENV[$port_key]:-}" ] || die ".env 에 $port_key 가 필요합니다(.env.example 의 \"이 PC\" 절)"
+    printf 'http://localhost:%s' "${ENV[$port_key]}"
+}
+
+# 주소의 포트 — http://localhost:13000 → 13000, 포트가 없으면 방식의 기본(http 80 · https 443)
 url_port() {
     local u="${1#*://}" p=''
     u="${u%%/*}"
     [[ "$u" == *:* ]] && p="${u##*:}"
-    printf '%s' "${p:-$2}"
+    if [ -z "$p" ]; then
+        case "$1" in
+            https://*) p=443 ;;
+            *) p=80 ;;
+        esac
+    fi
+    printf '%s' "$p"
+}
+
+# 예시 파일에는 있는데 값 파일에 없는 키(공백으로 이어서) — 예시에 새로 생긴 키를 값 파일에 옮겨 적지 않으면 기본값으로 조용히 돈다
+missing_example_keys() {
+    local example="$1" k out=()
+    local -n have="$2"
+    [ -f "$example" ] || return 0
+    while IFS= read -r k; do
+        [ -n "$k" ] && [ -z "${have[$k]+x}" ] && out+=("$k")
+    done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$example" | tr -d '\r')
+    printf '%s' "${out[*]}"
 }
 
 # 원클릭 전 확인 — 필요한 파일 · 값 · 도구를 한꺼번에 보고, 하나라도 빠지면 클러스터에 닿기 전에 멈춘다
@@ -502,7 +805,7 @@ preflight() {
     step "확인 — 값 파일 · 필수 값 · 도구"
     if [ -f "$ENV_FILE" ]; then
         read_env_file "$ENV_FILE" ENV
-        for k in KUBE_CONTEXT "${INFRA_SECRET_KEYS[@]}" GATEWAY_PUBLIC_URL WEB_PUBLIC_URL; do
+        for k in KUBE_CONTEXT "${INFRA_SECRET_KEYS[@]}" GRAFANA_ADMIN_PASSWORD; do
             [ -n "${ENV[$k]:-}" ] || problems+=(".env 에 $k 가 비어 있다(.env.example 참고)")
         done
     else
@@ -520,16 +823,75 @@ preflight() {
         problems+=("backend/.env 가 없다 — cp backend/.env.example backend/.env (로컬은 그대로 쓴다)")
     fi
     [ -f "$ROOT/backend/Dockerfile" ] || problems+=("backend/ 가 비어 있다 — git submodule update --init")
+    local fe_file
+    fe_file="$(frontend_env_file)"
+    if [ -n "$fe_file" ] && [ -f "$fe_file" ]; then
+        load_frontend_env
+        for k in "${WEB_SECRET_REQUIRED[@]}"; do
+            [ -n "${FENV[$k]:-}" ] || problems+=("${FENV_FILE#"$ROOT"/} 에 $k 가 비어 있다(frontend/.env.example 참고$([ "$k" = NEXTAUTH_SECRET ] && echo ' — 만들기: openssl rand -base64 32'))")
+        done
+        for k in $(unknown_web_secret_keys); do
+            problems+=("${FENV_FILE#"$ROOT"/} 의 $k 는 비밀값 같은데 deskless.sh 가 모르는 키다 — WEB_SECRET_* 와 charts/web/values.yaml 의 secretKeys 에 넣는다")
+        done
+    else
+        problems+=("frontend/.env.production(없으면 frontend/.env)이 없다 — cp frontend/.env.example frontend/.env.production 후 NEXTAUTH_SECRET 을 채운다(만들기: openssl rand -base64 32)")
+    fi
+    [ -f "$ROOT/frontend/Dockerfile" ] || problems+=("frontend/ 가 비어 있다 — git submodule update --init")
+    # 예시에 새로 생긴 키 — 값 파일에 옮겨 적는다(값이 기본이면 예시 그대로)
+    local missing
+    if [ -f "$ENV_FILE" ]; then
+        missing="$(missing_example_keys "$ROOT/.env.example" ENV)"
+        [ -z "$missing" ] || problems+=(".env 에 없는 키(.env.example 에 새로 생김): $missing — .env.example 에서 옮겨 적는다")
+    fi
+    if [ -n "$BENV_LOADED" ]; then
+        missing="$(missing_example_keys "$ROOT/backend/.env.example" BENV)"
+        [ -z "$missing" ] || problems+=("backend/.env 에 없는 키(backend/.env.example 에 새로 생김): $missing — 옮겨 적는다")
+    fi
+    if [ -n "$FENV_FILE" ]; then
+        missing="$(missing_example_keys "$ROOT/frontend/.env.example" FENV)"
+        [ -z "$missing" ] || problems+=("${FENV_FILE#"$ROOT"/} 에 없는 키(frontend/.env.example 에 새로 생김): $missing — 옮겨 적는다")
+    fi
+    # 이 PC 값(로컬 k3d) — 포트는 1 ~ 65535, 서로 겹치지 않게, 기다리는 시간은 정수
+    if is_local; then
+        local seen=" " v
+        for k in "${LOCAL_PORT_KEYS[@]}"; do
+            v="${ENV[$k]:-}"
+            if ! [[ "$v" =~ ^[1-9][0-9]{0,4}$ ]] || [ "$v" -gt 65535 ]; then
+                problems+=(".env 의 $k 는 PC 포트 번호(1 ~ 65535)여야 한다(지금: ${v:-빈 값})")
+            elif [[ "$seen" == *" $v "* ]]; then
+                problems+=(".env 의 $k($v)가 다른 LOCAL_*_PORT 와 겹친다")
+            fi
+            seen+="$v "
+        done
+        # 로컬에서 공개 주소를 직접 적었고 이 PC(localhost)를 가리키면 — 그 포트가 PC 입구(LOCAL_GATEWAY_PORT · LOCAL_WEB_PORT)와 같아야 한다
+        local pair url_key port_key
+        for pair in GATEWAY_PUBLIC_URL:LOCAL_GATEWAY_PORT WEB_PUBLIC_URL:LOCAL_WEB_PORT; do
+            url_key="${pair%%:*}" port_key="${pair#*:}"
+            v="${ENV[$url_key]:-}"
+            if [[ "$v" =~ ^https?://(localhost|127\.0\.0\.1)(:|/|$) ]] && [ "$(url_port "$v")" != "${ENV[$port_key]:-}" ]; then
+                problems+=(".env 의 $url_key($v) 포트가 $port_key(${ENV[$port_key]:-빈 값})와 다르다 — 로컬은 $url_key 를 비우면 PC 포트로 정해진다")
+            fi
+        done
+        for k in LOCAL_START_TIMEOUT_SECONDS; do
+            [[ "${ENV[$k]:-}" =~ ^[1-9][0-9]*$ ]] || problems+=(".env 의 $k 는 1 이상의 정수여야 한다(지금: ${ENV[$k]:-빈 값})")
+        done
+        [ -n "${ENV[LOCAL_DATA_VOLUME]:-}" ] || problems+=(".env 에 LOCAL_DATA_VOLUME(로컬 클러스터 데이터 볼륨 이름)이 비어 있다")
+    else
+        for k in GATEWAY_PUBLIC_URL WEB_PUBLIC_URL; do
+            [ -n "${ENV[$k]:-}" ] || problems+=(".env 에 $k 가 비어 있다 — 운영은 공개 도메인(https://…)")
+        done
+    fi
+    [[ "${ENV[WAIT_TIMEOUT_MINUTES]:-}" =~ ^[1-9][0-9]*$ ]] || problems+=(".env 의 WAIT_TIMEOUT_MINUTES 는 1 이상의 정수여야 한다(지금: ${ENV[WAIT_TIMEOUT_MINUTES]:-빈 값})")
     is_local && tools+=(k3d)
     for t in "${tools[@]}"; do
         command -v "$t" > /dev/null 2>&1 || add_windows_tool_paths
-        command -v "$t" > /dev/null 2>&1 || problems+=("$t 가 없다 — README '준비'")
+        command -v "$t" > /dev/null 2>&1 || problems+=("$t 가 없다 — README '설치' — Windows 는 .\deskless setup")
     done
     if [ "${#problems[@]}" -gt 0 ]; then
         printf '  ✗ %s\n' "${problems[@]}" >&2
         die "준비가 덜 됐다 — 위 ${#problems[@]}개를 채운 뒤 다시 실행하세요(클러스터는 건드리지 않았다)"
     fi
-    echo "  ✓ .env · backend/.env · 도구(${tools[*]})"
+    echo "  ✓ .env · backend/.env · ${FENV_FILE#"$ROOT"/} · 도구(${tools[*]})"
 }
 
 # PC 포트를 누가 듣고 있는지(Windows · 리눅스 netstat)
@@ -537,52 +899,78 @@ port_in_use() {
     netstat -an 2> /dev/null | grep -Eq "[:.]$1[[:space:]]+[^[:space:]]+[[:space:]]+(LISTEN|LISTENING)"
 }
 
-# Docker 엔진이 응답하는지 — Windows 에서 꺼져 있으면 Docker Desktop 을 켜고 기다린다(최대 3분)
+# Docker 엔진이 응답하는지 — 꺼져 있고 .env 에 DOCKER_DESKTOP_EXE 가 있으면 Docker Desktop 을 켜고 기다린다(최대 LOCAL_START_TIMEOUT_SECONDS 초)
 ensure_docker() {
     docker info > /dev/null 2>&1 && return 0
-    local exe="/c/Program Files/Docker/Docker/Docker Desktop.exe" i
-    [ -f "$exe" ] || die "Docker 엔진이 응답하지 않는다 — Docker 를 켠 뒤 다시 실행하세요"
-    step "Docker Desktop 켜기 — 엔진이 뜰 때까지 기다린다(최대 3분)"
-    cmd.exe //c start "" "$(cygpath -w "$exe")"
-    for i in $(seq 1 60); do
+    local exe="${ENV[DOCKER_DESKTOP_EXE]:-}" wait i
+    wait="${ENV[LOCAL_START_TIMEOUT_SECONDS]:-}"
+    [ -n "$exe" ] || die "Docker 엔진이 응답하지 않는다 — Docker 를 켠 뒤 다시 실행하세요(.env 의 DOCKER_DESKTOP_EXE 에 Docker Desktop 경로를 적으면 원클릭이 켠다)"
+    command -v cygpath > /dev/null 2>&1 && exe="$(cygpath -u "$exe")"
+    [ -f "$exe" ] || die ".env 의 DOCKER_DESKTOP_EXE 경로에 Docker Desktop 이 없다(${ENV[DOCKER_DESKTOP_EXE]}) — 이 PC 의 설치 위치로 고치세요"
+    step "Docker Desktop 켜기 — 엔진이 뜰 때까지 기다린다(최대 ${wait}초)"
+    if command -v cmd.exe > /dev/null 2>&1; then
+        cmd.exe //c start "" "$(cygpath -w "$exe")"
+    else
+        "$exe" > /dev/null 2>&1 &
+    fi
+    for i in $(seq 1 $(((wait + 2) / 3))); do
         docker info > /dev/null 2>&1 && return 0
         sleep 3
     done
-    die "Docker 엔진이 3분 안에 뜨지 않았다 — Docker Desktop 창을 확인하세요"
+    die "Docker 엔진이 ${wait}초 안에 뜨지 않았다 — Docker Desktop 창을 확인하거나 .env 의 LOCAL_START_TIMEOUT_SECONDS 를 늘리세요"
 }
 
-# 로컬 k3d 클러스터 — 없으면 만들고(README 와 같은 포트 · 데이터 볼륨 · API 주소), 있으면 켜고, 노드가 준비될 때까지 기다린다
+# 로컬 k3d 클러스터 — 없으면 .env 의 PC 포트 · 데이터 볼륨 · API 포트 · k3s 인자로 만들고, 있으면 켜고, 노드가 준비될 때까지 기다린다
 local_cluster() {
     local cluster="${ENV[KUBE_CONTEXT]#k3d-}" data gw web
+    local pg="${ENV[LOCAL_POSTGRES_PORT]:-}" mq="${ENV[LOCAL_RABBITMQ_PORT]:-}" mqa="${ENV[LOCAL_RABBITMQ_ADMIN_PORT]:-}" rd="${ENV[LOCAL_REDIS_PORT]:-}"
+    local gf="${ENV[LOCAL_GRAFANA_PORT]:-}" pr="${ENV[LOCAL_PROMETHEUS_PORT]:-}" api="${ENV[LOCAL_API_PORT]:-}"
     ensure_docker
+    gw="${ENV[LOCAL_GATEWAY_PORT]:-}"
+    web="${ENV[LOCAL_WEB_PORT]:-}"
     if k3d cluster get "$cluster" > /dev/null 2>&1; then
         step "로컬 클러스터 $cluster — 이미 있다(멈춰 있으면 켠다)"
         k3d cluster start "$cluster" > /dev/null
+        # 입구는 만들 때만 정해진다 — 뒤에 더한 입구(프론트 · 모니터링)가 없으면 알린다(그 화면만 PC 에서 열리지 않는다)
+        local mapped missing=() pair
+        mapped="$(docker port "k3d-$cluster-serverlb" 2> /dev/null || true)"
+        for pair in "$pg:5432" "$mq:5672" "$mqa:15672" "$rd:6379" "$gw:3000" "$web:5000" "$gf:3001" "$pr:9090"; do
+            grep -q "^${pair#*:}/tcp -> 127.0.0.1:${pair%%:*}\$" <<< "$mapped" || missing+=("${pair%%:*}")
+        done
+        if [ "${#missing[@]}" -gt 0 ]; then
+            echo "  ⚠ 이 클러스터에는 .env 의 PC 입구 ${missing[*]} 가 없다 — 그 주소는 PC 에서 열리지 않는다. 맞추려면 한 번 k3d cluster delete $cluster 후 다시 up(데이터 볼륨은 남는다)"
+        fi
     else
         data="$(env_get INFRA_DATA_DIR /var/lib/deskless)"
-        gw="$(url_port "${ENV[GATEWAY_PUBLIC_URL]}" 13000)"
-        web="$(url_port "${ENV[WEB_PUBLIC_URL]}" 15000)"
         # 만들기 전에 PC 포트가 비어 있는지 — 옛 compose 컨테이너 · PC 에 깐 DB 등이 잡고 있으면 만들다 실패한다
         local busy=() p
-        for p in 5432 5672 15672 6379 "$gw" "$web" "$LOCAL_API_PORT"; do
+        for p in "$pg" "$mq" "$mqa" "$rd" "$gw" "$web" "$gf" "$pr" "$api"; do
             port_in_use "$p" && busy+=("$p")
         done
-        [ "${#busy[@]}" -eq 0 ] || die "PC 포트 ${busy[*]} 를 다른 프로그램이 쓰고 있다 — 그 프로그램(옛 compose 컨테이너 · PC 에 깐 DB 등)을 끈 뒤 다시 실행하세요(클러스터는 건드리지 않았다)"
-        step "로컬 클러스터 $cluster 만들기 — PC 127.0.0.1 에 인프라 5432 · 5672 · 15672 · 6379, 게이트웨이 $gw, 웹 $web, 쿠버네티스 API $LOCAL_API_PORT"
+        [ "${#busy[@]}" -eq 0 ] || die "PC 포트 ${busy[*]} 를 다른 프로그램이 쓰고 있다 — 그 프로그램을 끄거나 .env 의 LOCAL_*_PORT 를 바꾼 뒤 다시 실행하세요(클러스터는 건드리지 않았다)"
+        # k3s 에 더 줄 인자(.env 의 LOCAL_K3S_ARGS — 공백으로 여러 개, 예: cgroup v1 PC 의 --kubelet-arg=fail-cgroupv1=false@server:*)
+        local k3s_args=() a
+        read -ra k3s_args <<< "${ENV[LOCAL_K3S_ARGS]:-}"
+        local extra=()
+        for a in "${k3s_args[@]}"; do
+            extra+=(--k3s-arg "$a")
+        done
+        step "로컬 클러스터 $cluster 만들기 — PC 127.0.0.1 에 인프라 $pg · $mq · $mqa · $rd, 게이트웨이 $gw, 웹 $web, Grafana $gf, Prometheus $pr, 쿠버네티스 API $api, 데이터 볼륨 ${ENV[LOCAL_DATA_VOLUME]}"
         # 볼륨 자리(/var/…)를 Git Bash 가 Windows 경로로 바꾸지 않게
         MSYS_NO_PATHCONV=1 k3d cluster create "$cluster" \
-            -p "127.0.0.1:5432:5432@loadbalancer" -p "127.0.0.1:5672:5672@loadbalancer" \
-            -p "127.0.0.1:15672:15672@loadbalancer" -p "127.0.0.1:6379:6379@loadbalancer" \
+            -p "127.0.0.1:$pg:5432@loadbalancer" -p "127.0.0.1:$mq:5672@loadbalancer" \
+            -p "127.0.0.1:$mqa:15672@loadbalancer" -p "127.0.0.1:$rd:6379@loadbalancer" \
             -p "127.0.0.1:$gw:3000@loadbalancer" -p "127.0.0.1:$web:5000@loadbalancer" \
-            -v "$LOCAL_DATA_VOLUME:$data@server:0" \
-            --api-port "127.0.0.1:$LOCAL_API_PORT" \
-            --k3s-arg "--kubelet-arg=fail-cgroupv1=false@server:*"
+            -p "127.0.0.1:$gf:3001@loadbalancer" -p "127.0.0.1:$pr:9090@loadbalancer" \
+            -v "${ENV[LOCAL_DATA_VOLUME]}:$data@server:0" \
+            --api-port "127.0.0.1:$api" \
+            "${extra[@]}"
     fi
-    step "노드 준비 기다리기(최대 3분)"
-    kube wait --for=condition=Ready node --all --timeout=180s > /dev/null
+    step "노드 준비 기다리기(최대 ${ENV[LOCAL_START_TIMEOUT_SECONDS]}초)"
+    kube wait --for=condition=Ready node --all --timeout="${ENV[LOCAL_START_TIMEOUT_SECONDS]}s" > /dev/null
 }
 
-# 전부 설치 · 갱신(원클릭) — 확인 → (로컬이면) Docker · 클러스터 → 인프라 → 백엔드. 묶음이 늘면 여기 더한다(프론트 Phase 4 · 모니터링 Phase 5)
+# 전부 설치 · 갱신(원클릭) — 확인 → (로컬이면) Docker · 클러스터 → 인프라 → 백엔드 → 프론트 → 모니터링. 묶음이 늘면 여기와 preflight 에 더한다
 all_up() {
     preflight
     echo "할 일 — 대상 클러스터 ${ENV[KUBE_CONTEXT]}"
@@ -593,6 +981,8 @@ all_up() {
     fi
     echo "  2. 인프라 — PostgreSQL · RabbitMQ · Redis"
     echo "  3. 백엔드 — 이미지 4개 빌드(처음엔 오래 걸린다) · 마이그레이션 · 앱"
+    echo "  4. 프론트 — 이미지 빌드(공개 주소를 박는다) · 앱"
+    echo "  5. 모니터링 — Prometheus · Grafana · 수집기"
     echo
     if is_local; then
         local_cluster
@@ -602,10 +992,15 @@ all_up() {
     echo
     backend_up
     echo
+    web_up
+    echo
+    monitoring_up
+    echo
     echo "✓ 전부 올렸다 — 상태: ./deskless.sh status"
-    echo "  게이트웨이 ${ENV[GATEWAY_PUBLIC_URL]%/} · Swagger ${ENV[GATEWAY_PUBLIC_URL]%/}/${BENV[SWAGGER_PATH]:-swagger}"
+    echo "  웹 $(public_url WEB_PUBLIC_URL LOCAL_WEB_PORT) · 게이트웨이 $(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT) · Swagger $(public_url GATEWAY_PUBLIC_URL LOCAL_GATEWAY_PORT)/${BENV[SWAGGER_PATH]:-swagger}"
+    monitoring_addresses "$(truthy "$(env_get MONITORING_EXPOSE 0)")"
     if [ "$(truthy "$(env_get INFRA_EXPOSE 0)")" = true ]; then
-        echo "  PostgreSQL localhost:5432 · RabbitMQ localhost:5672(관리 화면 http://localhost:15672) · Redis localhost:6379"
+        echo "  $(infra_addresses)"
     fi
 }
 
@@ -614,6 +1009,10 @@ all_status() {
     infra_status
     echo
     backend_status
+    echo
+    web_status
+    echo
+    monitoring_status
 }
 
 # 묶음 · 동작 고르기
@@ -629,7 +1028,7 @@ main() {
             all_status
             return 0
             ;;
-        infra | backend) ;;
+        infra | backend | web | monitoring) ;;
         '' | -h | --help | help)
             usage
             exit 0
@@ -649,6 +1048,12 @@ main() {
         backend:status) backend_status ;;
         backend:migrate) backend_migrate ;;
         backend:down) backend_down ;;
+        web:up) web_up ;;
+        web:status) web_status ;;
+        web:down) web_down ;;
+        monitoring:up) monitoring_up ;;
+        monitoring:status) monitoring_status ;;
+        monitoring:down) monitoring_down ;;
         *)
             usage
             die "모르는 동작: $bundle ${action:-(없음)}"

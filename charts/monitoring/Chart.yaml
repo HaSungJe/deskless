@@ -1,0 +1,9 @@
+# 모니터링 차트 — Prometheus(지표 수집 · 보관 · 기록 규칙) · Grafana(대시보드) · PostgreSQL · Redis 수집기를 파드 1개씩
+# 옛 backend compose.monitoring.yml · docker/prometheus/ · docker/grafana/(backend 3125886)와 같은 이미지 · 설정 — 앱 찾기만 쿠버네티스 방식(파드 라벨)
+# 설치 · 지우기는 ./deskless.sh monitoring up | down (.env → Secret → 이 차트). 규칙: docs/kubernetes.md
+apiVersion: v2
+name: deskless-monitoring
+description: deskless 모니터링 — Prometheus · Grafana(서비스 부하 · 인프라 대시보드) · PostgreSQL · Redis 수집기
+type: application
+version: 0.1.0
+appVersion: '1'

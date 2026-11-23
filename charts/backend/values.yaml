@@ -22,7 +22,7 @@ autoscale:
 
 # 게이트웨이를 밖으로
 gateway:
-    # GATEWAY_EXPOSE — true 면 Service 를 LoadBalancer(k3s servicelb)로 3000 을 연다(로컬 k3d 가 PC 127.0.0.1:13000 으로 넘긴다)
+    # GATEWAY_EXPOSE — true 면 Service 를 LoadBalancer(k3s servicelb)로 3000 을 연다(로컬 k3d 가 PC 127.0.0.1 의 LOCAL_GATEWAY_PORT — 기본 13000 — 로 넘긴다)
     expose: false
     # GATEWAY_HOST — 있으면 Ingress(이 주소 → gateway:3000). 운영 공개 주소
     host: ''

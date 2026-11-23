@@ -1,0 +1,60 @@
+# Prometheus 설정 — 옛 backend docker/prometheus/prometheus.yml(3125886)을 쿠버네티스로 옮긴 것. job 이름 · display_name 은 그대로다(rules.yml · 대시보드가 쓴다)
+# 차트가 ConfigMap prometheus-config 로 /etc/prometheus 에 넣는다 — 바꾼 뒤 ./deskless.sh monitoring up(내용 해시가 바뀌어 파드가 다시 뜬다)
+#
+# 앱(job = 앱 이름)은 쿠버네티스 API 로 같은 네임스페이스의 파드를 찾아 긁는다(옛 Docker DNS 자리) — 다음을 모두 만족하는 파드의 지표 포트:
+#   라벨 app.kubernetes.io/name 이 job 이름과 같다 · 컨테이너 포트 이름이 metrics(9464 · /metrics) · Running
+# 늘리거나 줄이면(HPA 포함) 바로 따라가고, 지운 파드는 목록에서 빠진다. instance = 파드 이름 — 파드 IP · 노드 같은 다른 라벨은 붙이지 않는다(라벨은 개수가 정해진 값만)
+# 다른 프로젝트를 붙일 때는 아래 "앱" 에 같은 모양으로 job 하나(앱 이름 · 표시 이름)를 더하고, 파드에 라벨 app.kubernetes.io/name: <job 이름> 과 이름이 metrics 인 9464 포트를 둔다
+global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+rule_files:
+    - /etc/prometheus/rules.yml
+
+scrape_configs:
+    # ── 앱 (지표 전용 포트 9464 · /metrics) ──
+    # display_name = 대시보드에 보이는 한국어 이름 — 이 job 의 모든 지표 · up 에 붙는다. 새 앱도 같은 모양으로(이름 포함)
+    # 파드 찾기 · 고르기 규칙은 첫 job 에 이름(&)을 붙여 두고 다른 job 이 그대로 쓴다(*):
+    #   app_job      파드 라벨 app.kubernetes.io/name = job 이름인 파드만(keepequal)
+    #   app_port     컨테이너 포트 이름 metrics 만(같은 파드의 본 포트 · 초기화 컨테이너는 빠진다)
+    #   app_running  Running 파드만(아직 뜨는 · 끝난 파드는 빠진다)
+    #   app_instance instance = 파드 이름(기본값 IP:포트 대신)
+    - job_name: gateway
+      kubernetes_sd_configs: &app_pods [{role: pod, namespaces: {own_namespace: true}}]
+      relabel_configs:
+          - &app_job {action: keepequal, source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name], target_label: job}
+          - &app_port {action: keep, source_labels: [__meta_kubernetes_pod_container_port_name], regex: metrics}
+          - &app_running {action: keep, source_labels: [__meta_kubernetes_pod_phase], regex: Running}
+          - &app_instance {source_labels: [__meta_kubernetes_pod_name], target_label: instance}
+          - {target_label: display_name, replacement: '게이트웨이'}
+    - job_name: user-service
+      kubernetes_sd_configs: *app_pods
+      relabel_configs: [*app_job, *app_port, *app_running, *app_instance, {target_label: display_name, replacement: '이용자 서버'}]
+    - job_name: admin-service
+      kubernetes_sd_configs: *app_pods
+      relabel_configs: [*app_job, *app_port, *app_running, *app_instance, {target_label: display_name, replacement: '관리자 서버'}]
+    - job_name: scheduler
+      kubernetes_sd_configs: *app_pods
+      relabel_configs: [*app_job, *app_port, *app_running, *app_instance, {target_label: display_name, replacement: '스케줄러'}]
+    # 프론트 Next.js 서버(별도 저장소 — 웹 묶음 차트, 파드 라벨 app.kubernetes.io/name: web). 아직 올리지 않았으면 대상 0개 — 오류 아님
+    - job_name: web
+      kubernetes_sd_configs: *app_pods
+      relabel_configs: [*app_job, *app_port, *app_running, *app_instance, {target_label: display_name, replacement: '프론트'}]
+
+    # ── RabbitMQ (이미지에 든 rabbitmq_prometheus 플러그인 — 인프라 차트의 Service rabbitmq-headless 지표 포트 15692) ──
+    # 큐별 지표(적체 · 처리 중 · 소비자) — detailed 엔드포인트에서 필요한 묶음만
+    - job_name: rabbitmq-queues
+      metrics_path: /metrics/detailed
+      params:
+          family: [queue_coarse_metrics, queue_consumer_count]
+      static_configs: [{targets: ['rabbitmq-headless:15692']}]
+    # 브로커 전체(초당 발행 · 전달 · 연결)
+    - job_name: rabbitmq
+      static_configs: [{targets: ['rabbitmq-headless:15692']}]
+
+    # ── DB · Redis 수집기 (이 차트의 Service) ──
+    - job_name: postgres
+      static_configs: [{targets: ['postgres-exporter:9187']}]
+    - job_name: redis
+      static_configs: [{targets: ['redis-exporter:9121']}]

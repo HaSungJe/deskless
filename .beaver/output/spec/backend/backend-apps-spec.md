@@ -25,6 +25,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 | 5. 백엔드 지우기 | 릴리스만 지우고 공용 파일 · Secret · ConfigMap 은 남긴다 | 0건 |
 | 6. 원클릭 | 먼저 모두 확인 → 로컬 클러스터(Docker · 만들기 · 켜기) → 인프라 → 백엔드 | 0건 |
 | 7. 전부 상태 | 인프라 · 백엔드 상태를 차례로 | 0건 |
+| 8. 원클릭 설치 | (Windows) 프로그램(winget) · 값 파일을 없을 때만 준비 | 0건 |
 
 ---
 
@@ -53,7 +54,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 | `RABBITMQ_GATEWAY_PASSWORD` · `RABBITMQ_USER_SERVICE_PASSWORD` · `RABBITMQ_ADMIN_SERVICE_PASSWORD`(`backend/.env`) | ✓ | 앱 계정 — 인프라 계정 Job 도 같은 값을 읽는다 |
 | `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` · `TOSS_SECRET_KEY`(`backend/.env`) | | 비어도 된다 — SMS 는 로그로만, 결제만 503 |
 | 그 밖의 `backend/.env` 키(`NODE_ENV` · `TRUST_PROXY` · …) | | 모두 ConfigMap 으로 — 클러스터가 정하는 키(DB · Redis · 브로커 주소 · 포트 · 바인딩 · 서비스 주소 · 공개 주소 · 인스턴스 ID · 파일 폴더 · 지표)는 빼고 |
-| `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL`(`.env`) | ✓ | 백엔드 `GATEWAY_PUBLIC_URL` · `CORS_ORIGINS` · `USER_WEB_URL` 로(끝의 `/` 는 뗀다) — 로컬 13000 · 15000, 운영 도메인 |
+| `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL`(`.env`) | 운영 ✓ | 백엔드 `GATEWAY_PUBLIC_URL` · `CORS_ORIGINS` · `USER_WEB_URL` 로(끝의 `/` 는 뗀다) — 로컬은 비우면 `http://localhost:<LOCAL_GATEWAY_PORT · LOCAL_WEB_PORT>`, 운영은 도메인 |
 | `GATEWAY_REPLICAS_MIN/MAX` · `USER_SERVICE_…` · `ADMIN_SERVICE_…` · `SCHEDULER_…`(`.env`) | | 앱별 대수, 기본 2 ~ 4 · 2 ~ 4 · 1 ~ 1 · 1 ~ 1 |
 | `AUTOSCALE_CPU_PERCENT`(`.env`) | | 자동 증설 기준(코어 1개의 %), 기본 70 |
 | `GATEWAY_EXPOSE` · `GATEWAY_HOST` · `INGRESS_CLASS` · `GATEWAY_TLS_SECRET`(`.env`) | | 로컬은 노드 포트 3000(k3d 가 PC 13000 으로), 운영은 공개 주소로 Ingress |
@@ -69,7 +70,7 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 | 필수 비밀값이 비었다 | "✗ backend/.env 에 <키> 가 필요합니다" · 클러스터에 닿기 전 멈춤 | — (임시 설정 파일로 확인) |
 | `backend/.env` 에 모르는 비밀값 이름(`NEW_API_SECRET`)이 있다 | "✗ backend/.env 의 NEW_API_SECRET 는 비밀값 같은데 …" · 클러스터에 닿기 전 멈춤 | — (임시 설정 파일로 확인) |
 | `backend/.env.example` 그대로 | ConfigMap 키 14개 + 브로커 주소 + 공개 주소 3개(`.env` 의 13000 · 15000), PC 용 주소 · 포트 · 관리자 계정은 빠진다 | — (가짜 도구로 돌려 확인) |
-| `.env` 에 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 없다 | ".env 에 GATEWAY_PUBLIC_URL 가 필요합니다" 로 멈춤 — 클러스터에 닿지 않는다 | — (가짜 도구로 돌려 확인) |
+| 운영 클러스터인데 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 비었다 | "운영은 공개 도메인" 으로 멈춤 — 클러스터에 닿지 않는다(로컬은 PC 포트로 정해진다) | — (가짜 도구로 돌려 확인) |
 | 최소 > 최대 | "✗ <APP>_REPLICAS_MIN(…)이 <APP>_REPLICAS_MAX(…)보다 큽니다" · 멈춤 | — (임시 설정 파일 · 차트 fail 둘 다 확인) |
 | 로컬 k3d 가 아닌 클러스터 | "✗ 로컬 k3d 클러스터(KUBE_CONTEXT=k3d-…)가 아니면 레지스트리 이미지가 필요합니다" · 멈춤 | — (임시 설정 파일로 확인) |
 | 비밀번호에 `@ : /` 같은 글자가 있다 | `DATABASE_URL` · `REDIS_URL` 에 퍼센트 인코딩으로 들어간다 | — (urlencode 를 직접 돌려 확인) |
@@ -190,6 +191,28 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 
 ---
 
+## 8. 원클릭 설치 — `CMD .\deskless setup`
+
+**동작 흐름**
+
+1. **프로그램** — Git for Windows · Docker Desktop · helm · k3d · Headlamp 를 winget 으로 확인한다.
+   - 있음 → 건너뛴다
+   - 없음 → `winget install`(약관 · 관리자 권한은 사용자가 확인 — 자동 동의하지 않는다)
+2. **값 파일** — `.env` · `backend/.env` · 프론트 값 파일을 없을 때만 예시에서 만든다.
+   - 있음 → 그대로 둔다(덮어쓰지 않는다)
+   - 프론트 값 파일을 새로 만듦 → `NEXTAUTH_SECRET` 을 무작위로 채운다
+3. **다음 안내** — Docker Desktop 첫 실행 · "이 PC" 절 확인 · `.\deskless up`.
+
+**결과**
+
+| 상황 | 응답 | 테스트 |
+|---|---|---|
+| 처음 PC(값 파일 없음 · 프로그램 하나 없음) | 없는 프로그램만 설치, 값 파일 3개 생성 · `NEXTAUTH_SECRET` 44자 | — (설치를 화면 표시로 바꾼 시험 폴더에서 확인) |
+| 다시 실행 | 모두 "이미 있다" — 아무것도 바꾸지 않는다 | — (시험 폴더에서 확인) |
+| Git Bash 가 아직 없다 | 그래도 돈다(PowerShell 이 맡는다) | — (구조로 보장) |
+
+---
+
 ## 데이터 변화
 
 | 테이블 | 무엇이 바뀌나 |
@@ -209,3 +232,4 @@ affected_data: ["Secret deskless-backend", "ConfigMap deskless-backend-env", "He
 - [x] 앱에는 그 앱이 쓰는 비밀값만 준다 — 옛 compose 의 "통째로 넘기고 남의 것은 빈 값" 을 뒤집었다.
 - [x] 백엔드 앱 값(비밀값 · 설정 · 브로커 앱 계정)은 deskless 가 받아 둔 사본의 `backend/.env`(`backend/.env.example` 복사 — 백엔드 작업 폴더의 `.env` 와는 따로, 사용자 2026-11-24)에서 읽는다 — deskless `.env` 는 클러스터 몫만, 같은 값을 두 번 적지 않는다(사용자 2026-11-23). 이미지에는 `.env` 가 들어가지 않는다(`backend/.dockerignore`).
 - [x] 원클릭 — `./deskless.sh up`(Windows `deskless.cmd` 더블클릭)이 값 파일 · 필수 값 · 도구를 먼저 모두 확인하고 안내한 뒤 로컬 클러스터부터 끝까지 이어서 한다. 값 파일은 자동으로 복사하지 않고 확인만 한다(사용자 2026-11-24).
+- [x] 원클릭 설치 — `.\deskless setup`(Windows)이 프로그램(winget, 없는 것만 · 자동 동의 없음)과 값 파일(없을 때만 · 덮어쓰지 않음)을 준비한다. cmd 는 영문 실행기만, 일은 PowerShell(사용자 2026-11-24).

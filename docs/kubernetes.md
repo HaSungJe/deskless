@@ -1,6 +1,6 @@
 # 쿠버네티스 관리 규칙
 
-> 인프라 차트(`charts/infra/`) · 백엔드 차트(`charts/backend/`)와 실행 명령(`deskless.sh`)이 있다. 프론트 · 모니터링 차트는 로드맵(`.beaver/output/roadmap/k8s-roadmap.md`) 순서로 — 생기면 이 문서를 실제 파일 기준으로 고친다.
+> 인프라(`charts/infra/`) · 백엔드(`charts/backend/`) · 프론트(`charts/web/`) · 모니터링(`charts/monitoring/`) 차트와 실행 명령(`deskless.sh` · `deskless.cmd`)이 있다. 네트워크 격리 · 운영 준비는 로드맵(`.beaver/output/roadmap/k8s-roadmap.md`) 순서로 — 생기면 이 문서를 실제 파일 기준으로 고친다.
 
 ## 목적 — 서버 자동 증설
 
@@ -12,7 +12,7 @@
 | user-service | `USER_SERVICE_REPLICAS_MIN` · `USER_SERVICE_REPLICAS_MAX` | 2 ~ 4 | |
 | admin-service | `ADMIN_SERVICE_REPLICAS_MIN` · `ADMIN_SERVICE_REPLICAS_MAX` | 1 ~ 1 | |
 | scheduler | `SCHEDULER_REPLICAS_MIN` · `SCHEDULER_REPLICAS_MAX` | 1 ~ 1 | 늘려도 crontab 은 회차마다 1대만 돈다(`JobLockService` — `backend/AGENTS.md` 메시징 · 스케줄러 절) |
-| 프론트(web) | `WEB_REPLICAS_MIN` · `WEB_REPLICAS_MAX` | 1 ~ 1 | |
+| 프론트(web) | `WEB_REPLICAS_MIN` · `WEB_REPLICAS_MAX` | 2 ~ 4 | 기준은 백엔드와 같은 `AUTOSCALE_CPU_PERCENT`(사용자 2026-11-24) |
 
 - **모든 앱에 최소 · 최대를 기본값과 함께 둔다** — 최소 < 최대면 그 사이에서 자동 증설(HPA), 같으면 그 대수로 고정(HPA 없음). 기본값은 시작점이고 `.env` 로 바꾼다.
 - **기준은 CPU 사용률 70% 로 시작** — k3s 에 기본으로 든 지표만으로 되고 추가 설치가 없다. Node 서버 한 대는 코어 1개를 주로 써서 CPU 가 대시보드의 부하율(이벤트 루프 사용률 — 증설 판정 70%)과 거의 같이 움직인다. 부하율로 직접 늘리려면 Prometheus + prometheus-adapter 가 클러스터에 먼저 있어야 한다(모니터링 차트 뒤).
@@ -31,7 +31,7 @@
 
 - **앱별 비밀값** — 옛 compose 는 `.env` 를 통째로 넘기고 다른 앱의 비밀값만 빈 값으로 덮었다. 차트는 반대로 그 앱이 쓰는 키만 넘긴다: gateway(DB · Redis · JWT · 내부 토큰 · 자기 브로커 계정) · user-service(+ 토큰 암호화 · 비밀번호 해시 · AWS · 토스) · admin-service(+ 토큰 암호화 · 비밀번호 해시 · AWS) · scheduler(DB · Redis · AWS · 토스).
 - **설정 · 비밀값 흐름** — 백엔드 앱 값은 deskless 가 받아 둔 사본의 **`backend/.env`**(`backend/.env.example` 복사 — 로컬은 그대로)에서 읽는다 — deskless `.env` 에 다시 적지 않는다(사용자 결정 2026-11-23). 백엔드 작업 폴더(개발용 `npm run start:*`)의 `.env` 와는 따로다 — 백엔드는 독립 프로젝트, 쿠버네티스는 deskless 몫이라 클러스터용 값 파일을 deskless 가 갖는다(사용자 결정 2026-11-24). 브로커 앱 계정 비밀번호(`RABBITMQ_*_PASSWORD`)는 PC 의 npm 백엔드도 같은 클러스터 브로커에 붙으므로 두 파일이 같아야 한다(기본값은 같다). `deskless.sh` 가 Secret `deskless-backend`(정해 둔 비밀값 키 + `DATABASE_URL` · `REDIS_URL`)와 ConfigMap `deskless-backend-env`(`backend/.env` 의 나머지 키 전부 + `RABBITMQ_HOST` · `RABBITMQ_PORT`)를 만든다.
-  - 공개 주소 `GATEWAY_PUBLIC_URL` · `CORS_ORIGINS` · `USER_WEB_URL` 은 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL`(로컬 13000 · 15000, 운영 도메인) — `backend/.env` 의 같은 키(PC 실행용 3000 · 5000)는 쓰지 않는다.
+  - 공개 주소 `GATEWAY_PUBLIC_URL` · `CORS_ORIGINS` · `USER_WEB_URL` 은 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` — 로컬은 비워 두면 `http://localhost:<LOCAL_GATEWAY_PORT · LOCAL_WEB_PORT>`(기본 13000 · 15000), 운영은 도메인(필수). 로컬에서 `localhost` 주소를 직접 적으면 그 포트가 PC 포트와 같아야 한다(원클릭 확인). `backend/.env` 의 같은 키(PC 실행용 3000 · 5000)는 쓰지 않는다.
   - `DATABASE_URL` · `REDIS_URL` · `RABBITMQ_HOST` 는 클러스터 안 주소 — 인프라 계정으로 만들고(비밀번호는 퍼센트 인코딩), 관리형 서비스면 deskless `.env` 의 값. `backend/.env` 의 같은 키(PC 용 `localhost`)는 쓰지 않는다.
   - 포트 · 바인딩 · 서비스 주소 · 인스턴스 ID(비우면 파드 이름) · 파일 폴더 · 지표 포트 · 시간대는 차트가 정해 `backend/.env` 의 같은 키를 넘기지 않는다(`BACKEND_CLUSTER_KEYS`). 브로커 관리자 계정(`RABBITMQ_USER` · `RABBITMQ_PASSWORD` — `broker:check` 용)도 넘기지 않는다.
   - 비밀값 같은 이름(`PASSWORD` · `SECRET` · `TOKEN` · `_KEY` · `_CODE`)인데 모르는 키가 `backend/.env` 에 있으면 설정으로 넘기지 않고 멈춘다 — 백엔드가 비밀값을 더하면 `BACKEND_SECRET_*` 와 차트 `secretKeys` 에 넣는다.
@@ -39,6 +39,21 @@
 - **이미지** — `backend/`(deskless 에 받아 둔 커밋)를 빌드 컨텍스트로 `APP` 인자 4개, 태그 = 커밋 짧은 해시(이미 있으면 빌드 건너뜀), `k3d image import` 로 로컬 클러스터에 넣는다(`imagePullPolicy: IfNotPresent`). 로컬 k3d 가 아닌 클러스터는 레지스트리가 필요하다(로드맵 Phase 8).
 - **게이트웨이 공개** — 로컬은 `GATEWAY_EXPOSE=1` → Service LoadBalancer 3000(k3d 가 PC `127.0.0.1:13000`), 프록시가 없어 `backend/.env` 의 `TRUST_PROXY` 는 비운다(운영 Ingress 1단이면 1). 운영은 `GATEWAY_HOST` → Ingress. k3s 기본 Traefik 은 본문 한도 · 응답 버퍼링이 기본으로 없고 WebSocket 을 그대로 넘겨 앱이 기대하는 값(10MB · SSE · `/ws/`)을 따로 설정하지 않는다 — 다른 Ingress(nginx 등)는 그 설정이 필요하다(Phase 8).
 - **공용 파일 볼륨** — gateway · user-service · admin-service 가 노드 폴더 `<dataDir>/files` 를 `/app/storage/files` 로 같이 본다(노드 1대 전제 — 여러 대면 S3 모드). 노드 폴더는 root 소유로 생겨 initContainer 가 `node` 소유로 맞춘다.
+
+### 프론트 차트 `charts/web/`(릴리스 `deskless-web`)
+
+| 파일 | 만드는 것 |
+|---|---|
+| `values.yaml` | 이미지(`deskless/web:<태그>`) · 설정 해시 · Secret · ConfigMap 이름 · **비밀값 `secretKeys`**(`NEXTAUTH_SECRET` · `KAKAO_LOGIN_SECRET_ID` · `NAVER_LOGIN_SECRET_ID` · `TOSS_SECRET_KEY`) · 서버 안 게이트웨이 주소 `apiInternalUrl` · 대수 · CPU · 메모리 요청값 · 공개 방식(`expose` · `host` · `tlsSecret`) |
+| `templates/web.yaml` | Deployment + Service — 앱이 기대하는 값(`PORT=5000` · `HOSTNAME=0.0.0.0` · `METRICS_PORT=9464` · `METRICS_HOST=0.0.0.0` · `API_INTERNAL_URL` · TZ), 프로브(`/health/*` — 지표 포트), `preStop` 5초. 로컬은 Service LoadBalancer 5000(k3d 가 PC `127.0.0.1:15000`) |
+| `templates/hpa.yaml` | 최소 < 최대면 HPA(CPU — 백엔드와 같은 계산) |
+| `templates/ingress.yaml` | `WEB_HOST` 가 있을 때 웹 Ingress |
+
+- **값 파일** — deskless 가 받아 둔 사본의 **`frontend/.env.production`, 없으면 `frontend/.env`**(`frontend/.env.example` 복사 + `NEXTAUTH_SECRET` — 사용자 결정 2026-11-24). 작업 폴더의 `.env.local` 과는 따로다.
+- **빌드 값** — 값 파일을 그대로(따옴표 · 주석 유지) 쓰되 공개 주소 3개(`NEXT_PUBLIC_API_URL` · `NEXT_PUBLIC_SERVER_URL` · `NEXTAUTH_URL`)는 `.env` 의 공개 주소(로컬은 비우면 PC 포트로 정해진 주소)로 바꾼 임시 파일을 BuildKit secret `dotenv` 로만 넘긴다(`frontend/Dockerfile` — 이미지에 남지 않는다, `.dockerignore` 가 `.env*` 를 뺀다). 태그 = `frontend/` 커밋 + 빌드 값 해시 — 빌드 값이 바뀌면 다시 빌드한다.
+- **실행 값** — 비밀값(`WEB_SECRET_*`)은 Secret `deskless-web`, 나머지는 ConfigMap `deskless-web-env` + `NEXTAUTH_URL`. 빌드에만 쓰는 `NEXT_PUBLIC_*` · `NEXT_IMAGE_*` 와 차트가 정하는 키(`WEB_CLUSTER_KEYS` — 공개 주소 · `API_INTERNAL_URL` · 포트 · 바인딩 · 지표 · TZ)는 넘기지 않는다. 비밀값 같은 이름인데 모르는 키는 멈춘다(백엔드와 같다, `NEXT_PUBLIC_*` · `NEXT_IMAGE_*` 는 공개 값이라 뺀다).
+- **서버 안 게이트웨이 주소** — 로그인 · 가입 · 토큰 재발급 route 는 웹 파드(서버)에서 게이트웨이를 부른다. 로컬의 공개 주소 `localhost:13000` 은 파드 안에서 자기 자신이라, 차트가 `API_INTERNAL_URL=http://gateway:3000` 을 넣고 프론트가 서버에서 이 값을 먼저 쓴다(요청서 `requests/frontend/2026-11-24-api-internal-url.md`). 운영도 같은 값 — 인터넷을 돌지 않는다.
+- **SNS 로그인 콜백** — 카카오 · 네이버 개발자 콘솔에 클러스터 웹 주소(공개 주소 — 로컬 기본 `http://localhost:15000` + `/api/auth/callback/kakao` · `/naver`)도 등록한다.
 
 ## 그 밖은 단순하게 — Docker 에서 돌던 것처럼
 
@@ -69,19 +84,33 @@
 - **하루 1번 전체 덤프 · 7일 보관**, 주기와 보관 일수는 `.env` 로 조절(사용자 결정 2026-11-23).
 - **같은 서버 안에만 쌓는 내부 복구용** — 잘못 지운 데이터 · 버그로 망가진 데이터를 되돌리기. 서버 밖(S3 등)으로 복사하지 않는다 — 서버 · 디스크가 망가지면 백업도 같이 사라진다(사용자가 알고 고른 범위).
 - CronJob `postgres-backup`(`timeZone: Asia/Seoul` · 한 번에 하나 · 지난 기록 3개) — 서버와 같은 이미지의 `pg_dump -Fc` 로 `<dataDir>/backups/postgres/<DB>-<YYYYMMDD-HHmm>.dump` 를 쓴다. 임시 이름(`.…part`)으로 다 쓴 뒤 바꾸고, 빈 파일이면 실패로 끝내며, 덤프가 성공했을 때만 보관 일수보다 오래된 덤프(`-mmin +일수×1440`)를 지운다.
-- 백업 폴더는 PostgreSQL 파드의 `/backup` 에 읽기 전용으로 붙어 있어 되돌리기(`pg_restore`)를 그 파드 안에서 한다(README "백업 · 되돌리기"). 지금 한 번은 `./deskless.sh infra backup`(CronJob 에서 Job 을 만들어 끝까지 기다린다).
+- 백업 폴더는 PostgreSQL 파드의 `/backup` 에 읽기 전용으로 붙어 있어 되돌리기(`pg_restore`)를 그 파드 안에서 한다(아래 "운영 · 관리 절차"). 지금 한 번은 `./deskless.sh infra backup`(CronJob 에서 Job 을 만들어 끝까지 기다린다).
+
+### 모니터링 `charts/monitoring/`(릴리스 `deskless-monitoring`)
+
+- **옛 backend `compose.monitoring.yml` 그대로 옮긴 직접 만든 차트**(사용자 결정 2026-11-24 — kube-prometheus-stack · 오퍼레이터는 쓰지 않는다): Prometheus 3.16 · Grafana 13.2(한국어 화면 · 한국 시각 · 홈 = 서비스 부하) · postgres-exporter · redis_exporter, 이미지 패치 버전까지 고정. 설정 원본은 `files/`(backend `3125886` 의 `docker/prometheus/` · `docker/grafana/` — 대시보드 JSON 2개는 바이트 그대로, `rules.yml` 은 머리 주석만 더함).
+- **앱 찾기** — 옛 Docker DNS 대신 쿠버네티스 파드 찾기(`kubernetes_sd_configs` role pod · 자기 네임스페이스): 라벨 `app.kubernetes.io/name` 이 job 이름(gateway · user-service · admin-service · scheduler · web)이고 포트 이름이 `metrics` 인 Running 파드, `instance` = 파드 이름. 대수가 늘고 줄면 다음 회차(15초)에 따라간다. 읽기 권한은 ServiceAccount + 네임스페이스 Role(pods · services · endpoints 조회). job 이름 · `display_name` 은 대시보드 · 기록 규칙이 쓰므로 바꾸지 않는다 — 새 앱은 같은 모양으로 한 job(라벨 · `metrics` 포트 9464 · 한국어 이름).
+- **인프라 지표** — RabbitMQ 는 인프라 차트의 `rabbitmq-headless:15692`(브로커 · 큐별 두 job), PostgreSQL · Redis 는 수집기 Service(`postgres-exporter:9187` · `redis-exporter:9121`, 프로브는 TCP — `/metrics` 는 부를 때마다 DB 를 건드린다).
+- **Secret `deskless-monitoring`**(`deskless.sh` 가 `.env` 에서): `GRAFANA_ADMIN_USER` · `GRAFANA_ADMIN_PASSWORD`(Grafana 데이터 폴더가 빌 때 한 번만 적용) · `DATA_SOURCE_NAME`(인프라 계정 `postgres:5432` + `sslmode=disable`, 관리형이면 `DATABASE_URL` 에서 `schema` 파라미터를 뺀 값) · `REDIS_ADDR` · `REDIS_PASSWORD`. 수집기는 인프라 관리자 계정으로 붙는다(옛 `MONITORING_DATABASE_URL` 을 따로 두지 않는다).
+- **데이터** — 노드 폴더 `<dataDir>/prometheus`(보관 `PROMETHEUS_RETENTION`, 기본 30d) · `<dataDir>/grafana`, 소유자는 initContainer 가 맞춘다(Prometheus 65534 · Grafana 472). 대시보드는 ConfigMap 으로 `/etc/grafana/dashboards` 에 붙여 데이터 폴더와 섞지 않는다 — 화면에서 고친 것은 저장되지 않는다(JSON 을 고친다).
+- **여는 곳** — 로컬은 `MONITORING_EXPOSE=1` → Grafana Service 3001(→ 3000 — 노드의 3000 은 게이트웨이가 쓴다) · Prometheus 9090 을 LoadBalancer 로(k3d 가 PC `127.0.0.1:13001` · `:19090`). 운영은 열지 않고 `kubectl port-forward svc/grafana 13001:3001`. Prometheus · Grafana 는 1대(`Recreate` — 노드 폴더 하나), 자동 증설 대상이 아니다.
+- **설정이 바뀌면 다시 뜬다** — 설정 파일 해시(차트가 `checksum/config`)와 Secret 해시(`configHash`)를 파드 주석에.
 
 ## 클러스터 · 차트 · 실행 명령
 
-- **클러스터** — 로컬은 k3d(Docker Desktop 위 k3s), 운영은 리눅스 서버에 k3s 직접 설치(서버 1 ~ 3대). 같은 k3s 라 동작이 같다. 나중에 관리형(EKS)으로 옮겨도 차트는 그대로 — Ingress 종류 · 저장소 종류 이름은 `.env` 로 받는다. 로컬 k3d 클러스터는 원클릭(`./deskless.sh up`)이 없으면 만들고(README 의 손 명령과 같은 포트 · 데이터 볼륨 · API 주소), 운영 k3s 설치는 저장소 파일이 아니다 — README 에 명령을 적고 사용자가 실행한다.
+- **클러스터** — 로컬은 k3d(Docker Desktop 위 k3s), 운영은 리눅스 서버에 k3s 직접 설치(서버 1 ~ 3대). 같은 k3s 라 동작이 같다. 나중에 관리형(EKS)으로 옮겨도 차트는 그대로 — Ingress 종류 · 저장소 종류 이름은 `.env` 로 받는다. 로컬 k3d 클러스터는 원클릭(`./deskless.sh up`)이 없으면 `.env` 의 "이 PC" 값(포트 · 데이터 볼륨 · API 주소 · k3s 인자)으로 만들고, 운영 k3s 설치는 저장소 파일이 아니다 — 서버에서 사용자가 설치한다(로드맵 Phase 8).
 - **차트** — Helm 차트 한 벌을 로컬 · 운영에 그대로 쓴다. 환경 차이는 그 PC · 서버의 파일 두 개 — deskless `.env`(클러스터 몫: 대상 클러스터 · 인프라 계정 · 백업 · 도메인 · 대수 · 여는 포트) · `backend/.env`(백엔드 앱 값 — 비밀값 · 설정 · 브로커 앱 계정). 나누는 기준은 환경이 아니라 주인이다 — 같은 값을 두 파일에 적지 않는다.
-- **실행 명령 하나** — `.env` · `backend/.env` → Secret · ConfigMap → Helm 설치(옛 백엔드 `npm run docker:up` 자리), 로컬 · 운영 같은 명령. 잘못된 클러스터에 깔지 않게 `.env` 로 대상 클러스터를 정한다. 로컬 클러스터 만들기 손 명령(포트 · 데이터 볼륨 · API 주소)은 README — 원클릭이 같은 값으로 만든다.
+- **실행 명령 하나** — `.env` · `backend/.env` → Secret · ConfigMap → Helm 설치(옛 백엔드 `npm run docker:up` 자리), 로컬 · 운영 같은 명령. 잘못된 클러스터에 깔지 않게 `.env` 로 대상 클러스터를 정한다. 로컬 클러스터는 원클릭이 `.env` 의 "이 PC" 값으로 만든다(손 명령을 따로 두지 않는다).
 
 ### 실행 명령 `deskless.sh`
 
-- **원클릭 `./deskless.sh up`**(Windows `deskless.cmd` — 더블클릭 = `up`) — ① 먼저 모두 확인: 값 파일(`.env` · `backend/.env`) · 필수 값 · 모르는 비밀값 이름 · 도구를 한꺼번에 보고, 빠진 것을 전부 보여 준 뒤 클러스터에 닿기 전에 멈춘다 ② 할 일 목록 ③ 로컬(`KUBE_CONTEXT=k3d-<이름>`)이면 Docker 엔진 확인(Windows 는 꺼져 있으면 Docker Desktop 을 켜고 최대 3분) → 클러스터가 없으면 PC 포트(5432 · 5672 · 15672 · 6379 · 공개 주소 포트 · API 6550)가 비어 있는지 본 뒤 만들고, 있으면 켠다 → 노드 Ready ④ 묶음을 의존 순서대로(`infra` → `backend`, 프론트 · 모니터링은 생기면 여기 더한다) ⑤ 주소 안내. 운영 클러스터는 ③ 을 건너뛴다. `./deskless.sh status` 는 묶음 상태를 차례로. 새 묶음을 더하면 그 값 파일 · 필수 값을 원클릭 확인(`preflight`)에도 더한다.
-- Windows 에서 막 설치해 PATH 에 아직 없는 `k3d` · `helm`(winget 설치 폴더) · `docker`(Docker Desktop)는 스크립트가 찾아 PATH 에 더한다. 볼륨 자리(`/var/…`)는 Git Bash 가 Windows 경로로 바꾸지 않게 `MSYS_NO_PATHCONV=1` 로 넘긴다.
-- `./deskless.sh <묶음> <동작>` — 지금 묶음은 `infra`(`up` · `status` · `backup` · `down`) · `backend`(`up` · `status` · `migrate` · `down`). 새 묶음(프론트 · 모니터링)은 같은 스크립트에 하위 명령으로 더한다.
+- **원클릭 `./deskless.sh up`**(Windows `deskless.cmd` — 더블클릭 = `up`) — ① 먼저 모두 확인: 값 파일(`.env` · `backend/.env` · `frontend/.env.production` 또는 `.env`) · 필수 값 · 모르는 비밀값 이름 · 예시(`.env.example`)에 새로 생겼는데 값 파일에 없는 키 · 도구를 한꺼번에 보고, 빠진 것을 전부 보여 준 뒤 클러스터에 닿기 전에 멈춘다 ② 할 일 목록 ③ 로컬(`KUBE_CONTEXT=k3d-<이름>`)이면 Docker 엔진 확인(Windows 는 꺼져 있으면 Docker Desktop 을 켜고 최대 3분) → 클러스터가 없으면 `.env` 의 PC 포트(`LOCAL_*_PORT` · 공개 주소 포트)가 비어 있는지 본 뒤 그 값으로 만들고, 있으면 켠다(뒤에 더한 입구가 없으면 알린다) → 노드 Ready ④ 묶음을 의존 순서대로(`infra` → `backend` → `web` → `monitoring`) ⑤ 주소 안내. 운영 클러스터는 ③ 을 건너뛴다. `./deskless.sh status` 는 묶음 상태를 차례로. 새 묶음을 더하면 그 값 파일 · 필수 값을 원클릭 확인(`preflight`)에도 더한다.
+- **원클릭 설치 `.\deskless setup`**(Windows, 사용자 결정 2026-11-24) — `scripts/deskless-windows.ps1` 이 Git for Windows · Docker Desktop · helm · k3d · Headlamp 를 winget 으로 확인해 없는 것만 설치하고(약관 · 관리자 권한은 사용자가 확인 — 자동 동의 옵션을 쓰지 않는다), 값 파일 3개를 없을 때만 예시에서 만든다(덮어쓰지 않는다, 프론트 값 파일을 새로 만들 때만 `NEXTAUTH_SECRET` 을 무작위로). Git Bash 가 없어도 돌아야 해서 PowerShell 이 맡고, `deskless.cmd` 는 영문만 든 실행기(cmd 는 UTF-8 한글 · 하위 루틴을 섞으면 줄을 잘못 읽는다 — 실행 정책은 그 실행에만 `-ExecutionPolicy Bypass`, PC 설정은 바꾸지 않는다).
+- **로컬 클러스터를 만드는 인자의 이유** — `--api-port 127.0.0.1:<LOCAL_API_PORT>`: 빼면 k3d 가 API 를 모든 주소에 열고 kubectl 주소를 `host.docker.internal` 로 적는데, Docker Desktop 이 hosts 파일에 그 이름을 PC 의 바깥 IP 로 적어 두면 방화벽에 막혀 연결 시간 초과가 난다. `LOCAL_K3S_ARGS` 의 `--kubelet-arg=fail-cgroupv1=false@server:*`: Docker Desktop(WSL2 커널 5.15)은 cgroup v1 이라 k3s 1.35 kubelet 이 시작을 거부한다(cgroup v2 PC 는 비워도 된다). 데이터는 Docker 볼륨(`LOCAL_DATA_VOLUME`)을 노드의 `INFRA_DATA_DIR` 에 붙인다 — Windows 폴더를 바로 붙이면 PostgreSQL 이 데이터 폴더 권한을 확인해 뜨지 않는다. 볼륨은 클러스터를 지워도 남는다.
+- **스크립트 변수로 `TMP` 를 쓰지 않는다** — Git Bash 가 Windows 프로그램에 넘기는 `TMP` 를 덮으면 k3d · docker 의 임시 폴더가 비어 `C:\` 에 쓰려다 거부된다(임시 폴더 변수는 `WORK_DIR`).
+- **PC · 사용자마다 다른 값은 `.env` 에서**(사용자 결정 2026-11-24) — `GIT_BASH`(deskless.cmd) · `DOCKER_DESKTOP_EXE`(꺼져 있으면 켠다 · 비우면 켜지 않고 멈춘다) · `LOCAL_DATA_VOLUME` · `LOCAL_*_PORT`(게이트웨이 · 웹 · Grafana · Prometheus · 인프라 4 · API — 로컬 공개 주소는 비워 두면 게이트웨이 · 웹 포트로 정해진다) · `LOCAL_K3S_ARGS`(공백으로 여러 개) · `LOCAL_START_TIMEOUT_SECONDS` · `WAIT_TIMEOUT_MINUTES`(Helm · Job 대기 — 서버도). 원클릭 확인이 포트 형식 · 겹침 · 정수, 로컬에서 직접 적은 `localhost` 공개 주소의 포트가 PC 포트와 같은지를 먼저 본다. 실행 파일에는 이런 값을 적지 않는다 — 다른 PC 도 `.env` 만 고쳐 같은 실행 · 확인을 한다.
+- Windows 에서 막 설치해 PATH 에 아직 없는 `k3d` · `helm`(winget 설치 폴더 — `LOCALAPPDATA` 기준) · `docker`(`DOCKER_DESKTOP_EXE` 옆 `resources/bin`)는 스크립트가 찾아 PATH 에 더한다. 볼륨 자리(`/var/…`)는 Git Bash 가 Windows 경로로 바꾸지 않게 `MSYS_NO_PATHCONV=1` 로 넘긴다.
+- `./deskless.sh <묶음> <동작>` — 지금 묶음은 `infra`(`up` · `status` · `backup` · `down`) · `backend`(`up` · `status` · `migrate` · `down`) · `web`(`up` · `status` · `down`) · `monitoring`(`up` · `status` · `down`). 새 묶음(프론트 · 모니터링)은 같은 스크립트에 하위 명령으로 더한다.
 - `backend up` 은 필수 키 · 대수(정수 · 최소 ≤ 최대) · 자동 증설 기준을 먼저 확인하고(틀리면 클러스터에 닿기 전에 멈춘다), 이미지 빌드 → `k3d image import` → Secret · ConfigMap → `helm upgrade --install … --wait --timeout 15m`(마이그레이션 hook 포함) 순서로 간다. 대수 키는 앱 이름에서 만든다(`user-service` → `USER_SERVICE_REPLICAS_MIN`).
 - Job 을 기다리는 동작(`infra backup` · `backend migrate`)은 3초마다 성공 · 실패를 보고 최대 10분, 실패하면 로그를 보여 주고 멈춘다.
 - `.env` · `backend/.env` 는 `source` 하지 않고 `KEY=VALUE` 줄만 읽는다 — 빈 줄 · `#` 주석 무시, 줄 끝 CR 제거, 값을 감싼 따옴표 한 겹 제거, 값의 `$` · 공백은 그대로. `backend/.env` 는 백엔드 값이 필요한 동작(`infra up` · `backend up`)만 읽는다. 확인용으로 `DESKLESS_ENV_FILE` · `DESKLESS_BACKEND_ENV_FILE` 에 다른 파일을 줄 수 있다.
@@ -106,13 +135,50 @@
 | `gateway-lb` | Ingress(`/ws/` WebSocket 업그레이드 포함) |
 | `migrate` | Job |
 | 공용 네트워크(internal) | NetworkPolicy |
-| `.env` | Secret · ConfigMap(값은 deskless `.env` · `backend/.env`) |
+| `.env` | Secret · ConfigMap(값은 deskless `.env` · `backend/.env` · `frontend/.env.production`) |
 | `compose.monitoring.yml` · `docker/prometheus/` · `docker/grafana/` | 모니터링(Prometheus · Grafana · 수집기 · 기록 규칙 · 대시보드) |
 
 - **이미지** — 각 저장소의 `Dockerfile` 그대로. 백엔드는 `APP` 빌드 인자로 4개, 프론트는 빌드 secret `dotenv`(빌드 때 박히는 `NEXT_PUBLIC_*` — `frontend/AGENTS.md:114`). 로컬은 `deskless.sh` 가 PC 에서 빌드해 `k3d image import` 로 넣고(태그 = 하위 저장소 커밋 해시 — Tilt 는 쓰지 않는다, 2026-11-23), 운영은 레지스트리 태그(Phase 8).
 - **앱이 배포에 기대하는 값**(컨테이너 포트 · 바인딩 0.0.0.0 · 서비스 주소 · 인스턴스 ID · 앞단 단 수 `TRUST_PROXY` · 공용 파일 볼륨 · 업로드 본문 한도 10MB · SSE 버퍼링 끔 · `/ws/` 업그레이드 · 프로브 · 마이그레이션 명령)은 백엔드가 정해 두었다 — [backend/docs/architecture.md](../backend/docs/architecture.md) "실행 · 배포 — deskless 저장소(쿠버네티스)" 절(`:180`) · [backend/changes/README.md](../backend/changes/README.md) "deskless 가 맞출 것". 차트는 이 값을 맞추고, 백엔드가 이 표를 바꾸면 따라간다.
 - **헬스 체크 · 지표** — 앱은 지표 전용 포트(쿠버네티스 9464)에 `/metrics` · `/health/live` · `/health/ready` 를 연다(백엔드 · 프론트 같은 계약 — `requests/*/2026-11-23-k8s-cleanup.md` 2절). 준비 판단은 앱 상태만 본다 — 종료 전 대기 · 유예 시간은 차트가 맡는다.
 - **남은 과제** — 공용 파일 볼륨(옛 `deskless-files`)은 노드 1대에서만 그대로 쓰고, 여러 대면 S3 모드.
+
+## 운영 · 관리 절차
+
+명령의 `<컨텍스트>` 는 `.env` 의 `KUBE_CONTEXT`, 네임스페이스는 `deskless`.
+
+### 운영 서버
+
+- 리눅스 서버에 k3s 를 깔고 `./deskless.sh up` — 운영 클러스터(`KUBE_CONTEXT` 가 `k3d-…` 가 아님)에서는 클러스터 만들기 · 켜기를 하지 않는다. 이미지는 지금 로컬 k3d 에만 넣으므로 운영은 레지스트리가 필요하다(로드맵 Phase 8).
+- `.env` 는 첫 설치 전에 — 비밀번호 모두 새로(`GRAFANA_ADMIN_PASSWORD` 포함) · 공개 주소 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 을 도메인으로 · `INFRA_EXPOSE=0` · `GATEWAY_EXPOSE=0` + `GATEWAY_HOST` · `WEB_EXPOSE=0` + `WEB_HOST`(Ingress) · `MONITORING_EXPOSE=0` · `KUBE_CONTEXT` 를 운영 클러스터로.
+- `backend/.env` — 비밀값 모두 새로(백엔드 `docs/architecture.md` "운영에 올리기 전 값 확인") · `SEED_SAMPLE_DATA=0` · `TRUST_PROXY=1`(Ingress 1단). `frontend/.env.production` — `NEXTAUTH_SECRET` 새로 · SNS 로그인 · 토스 키.
+- Grafana · DB 같은 도구는 밖으로 열지 않고 필요할 때만 잠깐 연결한다 — `kubectl --context <컨텍스트> -n deskless port-forward svc/grafana <PC 포트>:3001`(PostgreSQL `svc/postgres …:5432` · RabbitMQ 관리 화면 `svc/rabbitmq …:15672` · Redis `svc/redis …:6379`).
+- 관리형 서비스(RDS · Amazon MQ · ElastiCache)를 쓰면 `.env` 의 `DATABASE_URL` · `REDIS_URL` · `RABBITMQ_HOST` 를 채우고 `infra up` 을 하지 않는다 — 관리형 브로커의 계정 · 권한은 `charts/infra/files/rabbitmq-init.sh` 로 만든다.
+
+### 백업 · 되돌리기
+
+- 백업 폴더는 PostgreSQL 파드의 `/backup` 에 읽기 전용으로 붙어 있다. 되돌리기 전에 앱을 멈춘다.
+
+```bash
+kubectl --context <컨텍스트> -n deskless exec postgres-0 -- sh -c 'ls -lt /backup'
+kubectl --context <컨텍스트> -n deskless exec postgres-0 -- sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB" /backup/<파일>.dump'
+```
+
+### 비밀번호 바꾸기 (설치 뒤)
+
+계정 · 비밀번호는 처음 설치할 때만(데이터 폴더가 빌 때) 적용된다. `.env` 만 바꾸면 Secret 만 바뀌고 실제 DB · 브로커는 그대로라 접속이 깨지므로, 실제 값을 먼저 바꾼 뒤 값 파일을 맞춘다.
+
+1. PostgreSQL — `kubectl --context <컨텍스트> -n deskless exec -it postgres-0 -- psql -U <POSTGRES_USER> -d <POSTGRES_DB>` 에서 `ALTER ROLE <POSTGRES_USER> PASSWORD '<새 비밀번호>';`
+2. RabbitMQ(관리자 · 앱 계정) — `kubectl --context <컨텍스트> -n deskless exec rabbitmq-0 -- rabbitmqctl change_password <계정> <새 비밀번호>`
+3. `.env`(인프라 계정 · Redis) · `backend/.env`(앱 계정 `RABBITMQ_*_PASSWORD`)를 새 값으로 → `./deskless.sh infra up`. Redis 는 시작할 때 비밀번호를 읽으므로 이어서 `kubectl --context <컨텍스트> -n deskless rollout restart statefulset/redis`.
+4. 클러스터의 백엔드는 `./deskless.sh backend up`. PC 에서 npm 으로 띄우는 백엔드(작업 폴더의 `.env`)도 같은 값으로.
+
+### 함께 알아 둘 것
+
+- 클러스터에 백엔드가 떠 있는 동안 PC 에서 `npm run start:*` 로 백엔드를 같이 띄우지 않는다 — 포트는 따로지만 같은 DB · 큐를 나눠 써서 명령이 어느 쪽 앱으로 갈지 모른다. PC 에서 백엔드를 개발할 때는 `./deskless.sh backend down`.
+- 웹의 로그인 · 가입(서버 쪽 route)은 프론트가 `API_INTERNAL_URL` 을 읽어야 클러스터에서 된다 — `requests/frontend/2026-11-24-api-internal-url.md`.
+- SNS 로그인(카카오 · 네이버)은 각 개발자 콘솔에 클러스터 웹 주소의 콜백(`/api/auth/callback/kakao` · `/naver`)도 등록한다.
+- 지우기 — `./deskless.sh <묶음> down`(데이터 · 백업 · Secret 은 남는다) · `k3d cluster delete <이름>`(데이터 볼륨은 남는다) · `docker volume rm <LOCAL_DATA_VOLUME>`(로컬 데이터 · 백업까지). 옛 compose 데이터 볼륨(`deskless-postgres-data` 등)은 옮기지 않는다 — 필요 없으면 지운다.
 
 ## 관리 도구
 

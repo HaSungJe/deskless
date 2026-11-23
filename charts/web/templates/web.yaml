@@ -1,0 +1,108 @@
+# 프론트 Next.js 서버 — Deployment + Service
+# 앱이 기대하는 값(frontend/Dockerfile · .env.example): 포트 5000 · 바인딩 0.0.0.0 · 지표 · 헬스 체크 METRICS_PORT 9464 · METRICS_HOST 0.0.0.0 · 서버만 쓰는 값은 실행 env
+{{- $w := .Values.web }}
+{{- if lt (int $w.replicasMin) 1 }}
+{{- fail "WEB_REPLICAS_MIN 은 1 이상이어야 합니다" }}
+{{- end }}
+{{- if gt (int $w.replicasMin) (int $w.replicasMax) }}
+{{- fail (printf "web: 최소 대수(%v)가 최대 대수(%v)보다 큽니다" $w.replicasMin $w.replicasMax) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+spec:
+  {{- if eq (int $w.replicasMin) (int $w.replicasMax) }}
+  # 최소 = 최대 — 이 대수로 고정(HPA 없음)
+  replicas: {{ $w.replicasMin }}
+  {{- end }}
+  {{- /* 최소 < 최대면 replicas 를 두지 않는다 — 대수는 HPA(hpa.yaml)가 정한다 */}}
+  selector:
+    matchLabels:
+      {{- include "web.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "web.labels" . | nindent 8 }}
+      annotations:
+        deskless/config-hash: {{ .Values.configHash | quote }}
+    spec:
+      # 종료 신호 → preStop 대기(Service 에서 빠질 시간) → 앱 종료
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: web
+          image: {{ printf "%s/web:%s" .Values.imageRepo .Values.imageTag }}
+          imagePullPolicy: IfNotPresent
+          # 비밀이 아닌 실행 값 — 프론트 값 파일의 [실행] 키(./deskless.sh 가 ConfigMap 으로)
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.configName }}
+          # 차트가 정하는 값(위 ConfigMap 보다 앞선다) + 서버만 쓰는 비밀값
+          env:
+            - name: TZ
+              value: {{ .Values.timeZone | quote }}
+            - name: PORT
+              value: '5000'
+            - name: HOSTNAME
+              value: '0.0.0.0'
+            - name: METRICS_PORT
+              value: '9464'
+            - name: METRICS_HOST
+              value: '0.0.0.0'
+            - name: API_INTERNAL_URL
+              value: {{ .Values.apiInternalUrl | quote }}
+            {{- range .Values.secretKeys }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secretName }}
+                  key: {{ . }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 5000
+            - name: metrics
+              containerPort: 9464
+          # 헬스 체크는 지표 전용 포트 — 준비됨은 Next.js 가 요청을 받을 수 있을 때(instrumentation register 가 끝난 뒤)
+          startupProbe:
+            httpGet: {path: /health/live, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /health/ready, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: metrics}
+            periodSeconds: 10
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec:
+                command: ['sleep', '5']
+          resources:
+            requests:
+              cpu: {{ printf "%vm" $w.cpuMilli }}
+              memory: {{ $w.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+spec:
+  {{- if $w.expose }}
+  # 로컬 — k3s servicelb 로 노드 5000(k3d 가 PC 의 LOCAL_WEB_PORT 로 넘긴다)
+  type: LoadBalancer
+  {{- else }}
+  type: ClusterIP
+  {{- end }}
+  selector:
+    {{- include "web.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http

@@ -1,0 +1,42 @@
+# 기본값 — 환경마다 다른 값은 ./deskless.sh 가 .env 에서 넘긴다(아래 주석의 키). 로컬 · 운영 파일을 나누지 않는다(docs/kubernetes.md)
+
+# Secret 이름 — ./deskless.sh 가 만든다(차트는 만들지 않는다). 키:
+#   GRAFANA_ADMIN_USER · GRAFANA_ADMIN_PASSWORD  Grafana 관리자 계정(.env 의 같은 이름 — 첫 실행 때 한 번만 적용된다)
+#   DATA_SOURCE_NAME                             PostgreSQL 수집기 접속 주소(postgresql://<계정>:<비밀번호>@postgres:5432/<DB>?sslmode=disable)
+#   REDIS_ADDR · REDIS_PASSWORD                  Redis 수집기 접속 주소(redis://redis:6379) · 비밀번호
+secretName: deskless-monitoring
+
+# 비밀값 해시 — ./deskless.sh 가 넘긴다. 바뀌면 Grafana · 수집기 파드가 새 값으로 다시 뜬다(Secret 은 파드를 다시 띄우지 않으면 읽히지 않는다)
+configHash: ''
+
+# 밖(노드 포트)으로 열지 — MONITORING_EXPOSE. true 면 Service grafana(3001) · prometheus(9090)를 LoadBalancer(k3s 내장 servicelb)로 연다
+# 로컬 k3d 가 PC 127.0.0.1 의 LOCAL_GRAFANA_PORT → 3001(Grafana) · LOCAL_PROMETHEUS_PORT → 9090(Prometheus) 으로 넘긴다(기본 13001 · 19090). 운영은 false(kubectl port-forward 로 본다)
+expose: false
+
+# 노드의 데이터 폴더 — INFRA_DATA_DIR(인프라와 같은 값). 아래에 prometheus · grafana 를 만든다(노드 1대 전제)
+dataDir: /var/lib/deskless
+
+timeZone: Asia/Seoul
+
+prometheus:
+    image: prom/prometheus:v3.16.0
+    # 보존 기간 — PROMETHEUS_RETENTION. 7일 판정 · 7일 시간대 칸 + 한 달 추이
+    retention: 30d
+    # 요청값만(자리 잡기용) — 한도는 두지 않는다(옛 compose 와 같다)
+    resources:
+        requests: {cpu: 100m, memory: 256Mi}
+
+grafana:
+    image: grafana/grafana:13.2.6
+    resources:
+        requests: {cpu: 50m, memory: 128Mi}
+
+postgresExporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    resources:
+        requests: {cpu: 20m, memory: 32Mi}
+
+redisExporter:
+    image: oliver006/redis_exporter:v1.97.0-alpine
+    resources:
+        requests: {cpu: 20m, memory: 32Mi}

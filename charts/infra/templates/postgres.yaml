@@ -1,5 +1,5 @@
 # PostgreSQL — 옛 compose.postgres.yml(backend 3125886) 그대로: 공식 이미지 · TZ · 데이터는 노드 고정 폴더
-# 계정 · 비밀번호(POSTGRES_*)는 데이터 폴더가 빌 때(첫 설치) 한 번만 적용된다 — 바꾸기는 README "비밀번호 바꾸기"
+# 계정 · 비밀번호(POSTGRES_*)는 데이터 폴더가 빌 때(첫 설치) 한 번만 적용된다 — 바꾸기는 docs/kubernetes.md "비밀번호 바꾸기"
 apiVersion: v1
 kind: Service
 metadata:
@@ -66,7 +66,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
-            # 백업 폴더(읽기 전용) — 되돌릴 때 이 파드 안에서 pg_restore /backup/<파일> (README "백업 · 되돌리기")
+            # 백업 폴더(읽기 전용) — 되돌릴 때 이 파드 안에서 pg_restore /backup/<파일> (docs/kubernetes.md "백업 · 되돌리기")
             - name: backup
               mountPath: /backup
               readOnly: true

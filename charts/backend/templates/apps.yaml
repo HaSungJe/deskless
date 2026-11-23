@@ -130,7 +130,7 @@ metadata:
     {{- include "backend.labels" $name | nindent 4 }}
 spec:
   {{- if and (eq $name "gateway") $.Values.gateway.expose }}
-  # 로컬 — k3s servicelb 로 노드 3000(k3d 가 PC 127.0.0.1:3000 으로 넘긴다)
+  # 로컬 — k3s servicelb 로 노드 3000(k3d 가 PC 의 LOCAL_GATEWAY_PORT 로 넘긴다)
   type: LoadBalancer
   {{- else }}
   type: ClusterIP

@@ -10,8 +10,8 @@
 flowchart LR
   P1["Phase 1 · 배포 구성 분리 (3)"]:::done --> P2["Phase 2 · 인프라 (6)"]:::done
   P2 --> P3["Phase 3 · 백엔드 앱 · 자동 증설 (7)"]:::done
-  P3 --> P4["Phase 4 · 프론트 (2)"]:::todo
-  P3 --> P5["Phase 5 · 모니터링 (3)"]:::todo
+  P3 --> P4["Phase 4 · 프론트 (2)"]:::inprog
+  P3 --> P5["Phase 5 · 모니터링 (3)"]:::inprog
   P4 -. 동시 가능 .- P5
   P4 --> P6["Phase 6 · 네트워크 격리 (1)"]:::todo
   P5 --> P6
@@ -26,21 +26,21 @@ flowchart LR
 - Phase 1 — 배포 구성 분리 · 유닛 3개 · 의존: — · 푼다: Phase 2 · 파일 집합: requests/, AGENTS.md, docs/ (+ backend · frontend 저장소) · done
 - Phase 2 — 인프라 · 유닛 6개 · 의존: Phase 1 · 푼다: Phase 3 · 파일 집합: charts/infra/, deskless.sh, .env.example, README.md · done
 - Phase 3 — 백엔드 앱 · 자동 증설 · 유닛 7개 · 의존: Phase 2 · 푼다: Phase 4, Phase 5 · 파일 집합: charts/backend/, deskless.sh, .env.example · done
-- Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · todo
-- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · todo
+- Phase 4 — 프론트 · 유닛 2개 · 의존: Phase 3 · 푼다: Phase 6 · 파일 집합: charts/web/ · in-progress
+- Phase 5 — 모니터링 · 유닛 3개 · 의존: Phase 3 · 푼다: Phase 6, Phase 7 · 파일 집합: charts/monitoring/ · in-progress
 - Phase 6 — 네트워크 격리 · 유닛 1개 · 의존: Phase 4, Phase 5 · 푼다: Phase 8 · 파일 집합: charts/*/templates/networkpolicy.yaml · todo
 - Phase 7 — 부하율 기준 자동 증설 · 유닛 1개 · 의존: Phase 5 · 푼다: — · 파일 집합: charts/monitoring/, charts/backend/ (HPA 기준) · todo
 - Phase 8 — 운영 준비 · 유닛 2개 · 의존: Phase 6 · 푼다: — · 파일 집합: deskless.sh, README.md, .env.example · todo
 
 동시 가능: Phase 4·Phase 5 · Phase 6·Phase 7
 
-지금: 진행 중 없음 · Next up: Phase 4
+지금: Phase 4, Phase 5 진행 중 · Next up: Phase 4
 
 ## 지금 할 일
-Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(localhost:15000) 옛 모니터링을 옮기기(동시 가능)
-- 정할 것 — 프론트 빌드 값 파일(백엔드처럼 frontend/ 사본에 두는 클러스터용 .env) · 모니터링 방식(직접 차트 vs kube-prometheus-stack)
-- 원클릭에 더하기 — .\deskless up 이 프론트 값 파일까지 먼저 확인하고 웹 · 모니터링까지 올린다
-- 확인 — http://localhost:15000 화면 · 대시보드에서 앱 부하율
+Phase 4 프론트 · Phase 5 모니터링 — 만들어졌다, 확인하고 ok
+- 준비 — frontend/.env.production(frontend/.env.example 복사 + NEXTAUTH_SECRET) · .env 에 새 키(원클릭이 알려 준다) · 클러스터 한 번 다시 만들기(13001 · 19090 입구)
+- 원클릭 — .\deskless up → http://localhost:15000(웹) · http://localhost:13001(Grafana) · http://localhost:19090(Prometheus)
+- 프론트 요청서 — requests/frontend/2026-11-24-api-internal-url.md 를 프론트 세션에 반영시키면 클러스터 웹 로그인까지
 - ok → 커밋 · 푸시하고 Phase 6 네트워크 격리로
 
 ## Scope & Actors
@@ -111,8 +111,8 @@ Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(l
 ### Phase 4 — 프론트 (web 을 클러스터에 올리기) · depends: Phase 3
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 17 | 프론트 이미지 | frontend `Dockerfile` — 빌드 secret `dotenv`(`NEXT_PUBLIC_*` 는 빌드 때 박힌다) | 빌드용 `.env.production` 을 어디서 받을지 | — | todo |
-| 18 | web Deployment · Service · Ingress 경로 · 자동 증설 | 포트 5000 · 지표 포트 · 프로브 · `WEB_REPLICAS_MIN` · `_MAX` | — | 17 | todo |
+| 17 | 프론트 이미지 | frontend `Dockerfile` — 빌드 secret `dotenv`(`NEXT_PUBLIC_*` 는 빌드 때 박힌다) | 빌드용 `.env.production` 을 어디서 받을지 | — | in-progress |
+| 18 | web Deployment · Service · Ingress 경로 · 자동 증설 | 포트 5000 · 지표 포트 · 프로브 · `WEB_REPLICAS_MIN` · `_MAX` | — | 17 | in-progress |
 
 **Expected commands**:
 
@@ -123,9 +123,9 @@ Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(l
 ### Phase 5 — 모니터링 (옛 백엔드 모니터링을 클러스터로 옮기기) · depends: Phase 3
 | # | Unit | Goal | Key decision | Depends | Status |
 |---|------|------|--------------|---------|--------|
-| 19 | Prometheus | 쿠버네티스에서 앱 파드 찾기 · 표시 이름 `display_name` · 기록 규칙(원본 backend `3125886:docker/prometheus/`) | 직접 만든 차트로 갈지, kube-prometheus-stack 으로 갈지 | — | todo |
-| 20 | Grafana | 서비스 부하(판정 표) · 인프라 대시보드 2개 · 한국어 화면 · 홈(원본 `3125886:docker/grafana/`) | — | 19 | todo |
-| 21 | 수집기 | PostgreSQL · Redis 수집기 · RabbitMQ 지표 플러그인(15692) | — | 19 | todo |
+| 19 | Prometheus | 쿠버네티스에서 앱 파드 찾기 · 표시 이름 `display_name` · 기록 규칙(원본 backend `3125886:docker/prometheus/`) | 직접 만든 차트로 갈지, kube-prometheus-stack 으로 갈지 | — | in-progress |
+| 20 | Grafana | 서비스 부하(판정 표) · 인프라 대시보드 2개 · 한국어 화면 · 홈(원본 `3125886:docker/grafana/`) | — | 19 | in-progress |
+| 21 | 수집기 | PostgreSQL · Redis 수집기 · RabbitMQ 지표 플러그인(15692) | — | 19 | in-progress |
 
 **Expected commands**:
 
@@ -174,7 +174,8 @@ Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(l
 ## Cross-Cutting Rules
 
 - 로컬 · 운영 파일을 나누지 않는다 — 차트 · values 한 벌, 환경 차이는 그 PC · 서버의 값 파일(새 키는 `.env.example` 에 로컬 기본값과 함께). 값 파일은 주인별로 — deskless `.env` 는 클러스터 몫, 앱 값은 하위 저장소의 `.env`(같은 값을 두 번 적지 않는다).
-- 브라우저 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 한 곳 — 앱의 주소 키에 넣는다. 로컬 클러스터는 13000 · 15000(PC `npm` 의 3000 · 5000 과 따로).
+- 브라우저 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 한 곳 — 앱의 주소 키에 넣는다. 로컬은 비우면 PC 포트(`LOCAL_GATEWAY_PORT` · `LOCAL_WEB_PORT` — 기본 13000 · 15000, PC `npm` 의 3000 · 5000 과 따로)의 `localhost` 주소.
+- PC · 사용자마다 다른 값(경로 · PC 포트 · 볼륨 · k3s 인자 · 기다리는 시간)은 실행 파일에 고정하지 않고 `.env` 의 "이 PC" 절 — 다른 환경도 `.env` 만 고쳐 같은 실행 · 확인(사용자 2026-11-24).
 - 실행은 `deskless.sh` 하나로 — 전부는 원클릭 `up`(먼저 모두 확인 · 로컬 클러스터부터, 묶음이 늘면 `up` 과 그 확인에 더한다), 묶음별은 `<묶음> <동작>` — 묶음마다 하위 명령을 더하고, 모든 명령은 `.env` 의 `KUBE_CONTEXT` 로만 클러스터에 닿는다.
 - 앱 대수는 앱마다 `<APP>_REPLICAS_MIN` · `_MAX`(모든 앱 기본값) — 다르면 HPA, 같으면 고정.
 - Ingress 종류 · 저장소 종류 이름은 차트에 고정하지 않는다(`.env`).
@@ -188,7 +189,8 @@ Phase 4 프론트 · Phase 5 모니터링 — 웹을 클러스터에 올리고(l
 - [x] 접속 주소 모양 — 주소를 따로: 로컬 클러스터 `localhost:13000`(gateway) · `:15000`(프론트) — PC `npm` 실행(3000 · 5000)과 부딪히지 않게, 운영 도메인 둘(api.<도메인> · <도메인>). 공개 주소는 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` 이 정해 앱 주소 키에 넣는다 — Phase 4 는 프론트 주소 키 · 카카오 · 네이버 콜백(15000) 등록(사용자 2026-11-23) (Phase 3 · 4)
 - [x] 마이그레이션 — `backend up` 때마다 앱보다 먼저 자동(옛 compose migrate 와 같다), 따로는 `backend migrate`(사용자 2026-11-23) (Phase 3)
 - [x] 앱 값 파일 — deskless 가 받아 둔 하위 저장소 사본의 `.env`(`.env.example` 복사)에서 읽고 deskless `.env` 에는 클러스터 몫만, 같은 값을 두 번 적지 않는다(사용자 2026-11-23). 백엔드 · 프론트는 독립 프로젝트라 작업 폴더의 `.env` 와는 따로 둔다(사용자 2026-11-24 — 백엔드 `backend/.env`, 프론트는 Phase 4 에서 같은 방식) (Phase 3 · 4)
-- [ ] 모니터링 방식 — 직접 만든 차트(옛 compose 1:1, 단순) vs kube-prometheus-stack(오퍼레이터 · 기본 대시보드 많음) (Phase 5)
+- [x] 모니터링 방식 — 직접 만든 차트(옛 compose 그대로 + 앱 파드 자동 찾기), kube-prometheus-stack 은 쓰지 않는다. 로컬은 PC 입구 Grafana 13001 · Prometheus 19090, 운영은 port-forward(사용자 2026-11-24) (Phase 5)
+- [x] 프론트 서버 쪽 게이트웨이 주소 — 프론트에 요청서(`API_INTERNAL_URL`, 비면 `NEXT_PUBLIC_API_URL`), 차트가 `http://gateway:3000`. 프론트 값 파일은 `frontend/.env.production`, 없으면 `frontend/.env`(사용자 2026-11-24) (Phase 4)
 - [ ] 이미지 레지스트리 — GHCR · Docker Hub · 서버 자체 레지스트리 (Phase 8)
 
 ## Notes / Risks

@@ -1,0 +1,31 @@
+# 자동 증설 — 최소 < 최대면 HPA(CPU). 목표 = 코어 1개의 cpuPercent% 를 CPU 요청값(cpuMilli)으로 나눈 값(백엔드 hpa.yaml 과 같은 계산)
+{{- $w := .Values.web }}
+{{- $percent := int .Values.autoscale.cpuPercent }}
+{{- if lt $percent 1 }}
+{{- fail "AUTOSCALE_CPU_PERCENT 는 1 이상이어야 합니다" }}
+{{- end }}
+{{- if gt (int $w.replicasMax) (int $w.replicasMin) }}
+{{- if lt (int $w.cpuMilli) 1 }}
+{{- fail "web: cpuMilli 는 1 이상이어야 합니다" }}
+{{- end }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: {{ $w.replicasMin }}
+  maxReplicas: {{ $w.replicasMax }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ div (mul $percent 1000) (int $w.cpuMilli) }}
+{{- end }}

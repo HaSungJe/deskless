@@ -1,0 +1,57 @@
+# PostgreSQL 수집기 — 옛 compose.monitoring.yml 의 postgres-exporter(backend 3125886) 그대로: 연결 수 · 커밋 · 캐시 적중 · 교착 · DB 크기
+# 접속 주소는 Secret 의 DATA_SOURCE_NAME(인프라 차트의 postgres:5432 — 읽기 전용 계정 권장, pg_monitor 역할). Prometheus job postgres 가 postgres-exporter:9187 을 긁는다
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-exporter
+  labels:
+    {{- include "monitoring.labels" "postgres-exporter" | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "monitoring.selector" "postgres-exporter" | nindent 4 }}
+  ports:
+    - name: metrics
+      port: 9187
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-exporter
+  labels:
+    {{- include "monitoring.labels" "postgres-exporter" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "monitoring.selector" "postgres-exporter" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "monitoring.labels" "postgres-exporter" | nindent 8 }}
+      annotations:
+        # Secret 이 바뀌면 다시 뜬다(./deskless.sh 가 넘긴다)
+        deskless/config-hash: {{ .Values.configHash | quote }}
+    spec:
+      # Service 주소 env(POSTGRES_PORT 등)를 넣지 않는다 — 옛 compose 처럼 DATA_SOURCE_NAME 만
+      enableServiceLinks: false
+      containers:
+        - name: postgres-exporter
+          image: {{ .Values.postgresExporter.image }}
+          env:
+            {{- include "monitoring.secretEnv" (dict "root" $ "name" "DATA_SOURCE_NAME" "key" "DATA_SOURCE_NAME") | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 9187
+          # 포트만 본다 — /metrics 는 부를 때마다 DB 에 묻는다(DB 가 끊기면 pg_up 0 으로 알린다)
+          readinessProbe:
+            tcpSocket: {port: metrics}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.postgresExporter.resources | nindent 12 }}

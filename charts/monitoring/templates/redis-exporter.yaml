@@ -1,0 +1,58 @@
+# Redis 수집기 — 옛 compose.monitoring.yml 의 redis-exporter(backend 3125886) 그대로: 메모리 · 명령 · 연결 · 키 적중 · AOF
+# 접속 주소 · 비밀번호는 Secret 의 REDIS_ADDR · REDIS_PASSWORD(인프라 차트의 redis:6379). Prometheus job redis 가 redis-exporter:9121 을 긁는다
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-exporter
+  labels:
+    {{- include "monitoring.labels" "redis-exporter" | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "monitoring.selector" "redis-exporter" | nindent 4 }}
+  ports:
+    - name: metrics
+      port: 9121
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-exporter
+  labels:
+    {{- include "monitoring.labels" "redis-exporter" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "monitoring.selector" "redis-exporter" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "monitoring.labels" "redis-exporter" | nindent 8 }}
+      annotations:
+        # Secret 이 바뀌면 다시 뜬다(./deskless.sh 가 넘긴다)
+        deskless/config-hash: {{ .Values.configHash | quote }}
+    spec:
+      # Service 주소 env(REDIS_PORT · REDIS_EXPORTER_PORT 등)를 넣지 않는다 — 수집기는 REDIS_* · REDIS_EXPORTER_* env 를 설정으로 읽는다
+      enableServiceLinks: false
+      containers:
+        - name: redis-exporter
+          image: {{ .Values.redisExporter.image }}
+          env:
+            {{- include "monitoring.secretEnv" (dict "root" $ "name" "REDIS_ADDR" "key" "REDIS_ADDR") | nindent 12 }}
+            {{- include "monitoring.secretEnv" (dict "root" $ "name" "REDIS_PASSWORD" "key" "REDIS_PASSWORD") | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 9121
+          # 포트만 본다 — /metrics 는 부를 때마다 Redis 에 묻는다(Redis 가 끊기면 redis_up 0 으로 알린다)
+          readinessProbe:
+            tcpSocket: {port: metrics}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.redisExporter.resources | nindent 12 }}

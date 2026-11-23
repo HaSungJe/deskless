@@ -1,0 +1,12 @@
+# Grafana 대시보드 — 옛 backend docker/grafana/provisioning/dashboards/deskless.yml(3125886), 대시보드 폴더만 /etc/grafana/dashboards 로 옮겼다(데이터 폴더 /var/lib/grafana 와 섞지 않게)
+# 차트가 ConfigMap grafana-provisioning 으로 /etc/grafana/provisioning/dashboards/ 에 넣는다
+# files/dashboards/*.json 을 Deskless 폴더에 넣는다. 파일이 원본이라 화면에서 고친 것은 저장되지 않는다(고칠 때는 JSON 을 고친다)
+apiVersion: 1
+providers:
+    - name: deskless
+      folder: Deskless
+      type: file
+      disableDeletion: true
+      allowUiUpdates: false
+      options:
+          path: /etc/grafana/dashboards
