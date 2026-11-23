@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # deskless 실행 명령 — .env → Secret → Helm. 로컬 · 운영 같은 명령(docs/kubernetes.md)
 #
+# 어디서 치나 — 셸마다 부르는 이름이 다르다(하는 일은 같다)
+#   PowerShell(Windows — VS Code 터미널 · Windows Terminal 기본)  .\deskless <명령>        deskless.cmd 가 Git Bash 로 이 파일을 돌린다
+#   bash(Git Bash · 리눅스)                                       ./deskless.sh <명령>      운영 서버는 ./deskless-server.sh <명령>
+#   PowerShell 에서 ./deskless.sh 를 치면 실행되지 않고 파일이 편집기로 열린다(.sh 는 PowerShell 이 돌리지 못한다)
+#   아래 목록은 bash 이름 — PowerShell 은 앞의 ./deskless.sh 를 .\deskless 로 바꿔 친다(예: .\deskless reset)
+#
 #   (Windows) .\deskless setup   원클릭 설치 — 프로그램(winget) · 값 파일(deskless.cmd → scripts/deskless-windows.ps1, Git Bash 없이)
 #   ./deskless.sh up               전부 설치 · 갱신(원클릭) — 값 파일 · 필수 값 · 도구를 먼저 모두 확인하고, 로컬(k3d)이면 Docker 켜기 · 클러스터 만들기부터 끝까지. Windows 는 deskless.cmd(더블클릭 = up)
 #   ./deskless.sh up <서비스…>      골라 갱신 — gateway · user-service · admin-service · scheduler · web(backend = 앱 4개). 인프라 · 모니터링 · 대시보드 · 고르지 않은 앱은 그대로(지금 떠 있는 이미지)
