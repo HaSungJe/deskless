@@ -7,3 +7,10 @@
 .DS_Store
 Thumbs.db
 /.idea
+
+# beaver · 편집기 — PC 마다 다른 로컬 설정(기획 · 보고 문서 .beaver/output 은 커밋한다)
+.beaver/.auto-branch-state.json
+.beaver/config.json
+.claude/worktrees/
+.claude/settings.json
+.vscode/
