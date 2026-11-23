@@ -42,7 +42,7 @@ affected_data: ["Deployment · Service dashboard(Headlamp + 로그인 문지기)
 | 운영 값(EXPOSE=0) | Service ClusterIP · 정책 들어오는 연결 없음 · port-forward 안내 | — (가짜 도구 · `helm template` 로 확인) |
 | 계정 · 비밀번호 없음(옛 `.env`) | 원클릭 확인에서 멈춤 — 새로 생긴 키 4개를 옮겨 적으라고 | — (가짜 도구로 확인) |
 | 새로 만드는 로컬 클러스터 | PC `127.0.0.1:<LOCAL_DASHBOARD_PORT>` → 4466 입구 포함 | — (가짜 도구로 확인) |
-| 전에 만든 로컬 클러스터 | 입구가 없다고 알림 — 한 번 지우고 다시 up | — |
+| 전에 만든 로컬 클러스터 | 입구가 없다고 알림 — `./deskless.sh reset`(지우고 다시 만들기) | — |
 | 브라우저 로그인 · 화면 | 계정으로 들어가 클러스터가 보인다 | — (클러스터 실행은 사용자 확인) |
 
 ---

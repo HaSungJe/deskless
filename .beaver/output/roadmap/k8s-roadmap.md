@@ -37,7 +37,7 @@ flowchart LR
 
 ## 지금 할 일
 모든 Phase 완료 — 클러스터에서 직접 확인
-- 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 로컬 클러스터를 한 번 지운 뒤 .\deskless up → http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드 로그인
+- 로컬 — .env 에 새 키 4개(LOCAL_DASHBOARD_PORT · DASHBOARD_*)를 옮기고 .\deskless reset(로컬 클러스터를 지우고 다시 만들어 전부 올린다) → http://localhost:<LOCAL_DASHBOARD_PORT> 대시보드 로그인
 - GHCR — .env.example 의 이미지 절을 .env 에 옮겨 GHCR_USER · GHCR_PUSH_TOKEN 을 넣고 .\deskless push gateway
 - 프론트 요청서 2건(API_INTERNAL_URL · 공개 값 실행 때 읽기)을 프론트 세션에 보낸다 — 반영되면 git submodule update --remote
 - 새로 할 일이 생기면 "로드맵에 추가"

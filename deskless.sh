@@ -7,6 +7,9 @@
 #   ./deskless.sh push [서비스…]   이미지를 GHCR 에 올리기(비우면 5개 전부) — IMAGE_REGISTRY · GHCR_USER · GHCR_PUSH_TOKEN. 클러스터에는 닿지 않는다
 #   ./deskless.sh restart [서비스…] 파드를 한 대씩 다시 띄우기(비우면 5개 전부) — 같은 태그를 다시 올렸을 때(registry 는 이미지를 다시 받는다)
 #   ./deskless.sh status           전부 상태(인프라 · 백엔드 · 프론트 · 모니터링 · 대시보드)
+#   ./deskless.sh stop             로컬 클러스터 끄기 — 앱 · 설정 · 데이터는 그대로(다시 켜기는 up)
+#   ./deskless.sh delete           로컬 클러스터 지우기 — 데이터(Docker 볼륨 LOCAL_DATA_VOLUME)는 남는다(다시 만들기는 up)
+#   ./deskless.sh reset            로컬 클러스터를 지우고 다시 만들어 전부 올리기 — PC 포트를 바꾸거나 새 입구가 생겼을 때(데이터는 남는다)
 #   ./deskless.sh infra up         인프라 설치 · 갱신(PostgreSQL · RabbitMQ 앱 계정 · Redis · PostgreSQL 백업)
 #   ./deskless.sh infra status     파드 · Service · 마지막 백업
 #   ./deskless.sh infra backup     지금 PostgreSQL 백업 한 번
@@ -1362,7 +1365,7 @@ local_cluster() {
             grep -q "^${pair#*:}/tcp -> 127.0.0.1:${pair%%:*}\$" <<< "$mapped" || missing+=("${pair%%:*}")
         done
         if [ "${#missing[@]}" -gt 0 ]; then
-            echo "  ⚠ 이 클러스터에는 .env 의 PC 입구 ${missing[*]} 가 없다 — 그 주소는 PC 에서 열리지 않는다. 맞추려면 한 번 k3d cluster delete $cluster 후 다시 up(데이터 볼륨은 남는다)"
+            echo "  ⚠ 이 클러스터에는 .env 의 PC 입구 ${missing[*]} 가 없다 — 그 주소는 PC 에서 열리지 않는다. 맞추려면 ./deskless.sh reset(Windows .\\deskless reset — 지우고 다시 만든다, 데이터 볼륨은 남는다)"
         fi
     else
         data="$(env_get INFRA_DATA_DIR /var/lib/deskless)"
@@ -1393,6 +1396,54 @@ local_cluster() {
     fi
     step "노드 준비 기다리기(최대 ${ENV[LOCAL_START_TIMEOUT_SECONDS]}초)"
     kube wait --for=condition=Ready node --all --timeout="${ENV[LOCAL_START_TIMEOUT_SECONDS]}s" > /dev/null
+}
+
+# 로컬 클러스터를 다루는 명령인지 확인 — KUBE_CONTEXT=k3d-<이름> 만. 운영 클러스터는 이 실행 파일이 끄거나 지우지 않는다(앱만 내리기: <묶음> down)
+require_local_cluster() {
+    require KUBE_CONTEXT
+    is_local || die "$1 명령은 로컬 클러스터(KUBE_CONTEXT=k3d-…) 전용입니다 — 운영 클러스터는 끄거나 지우지 않습니다(앱만 내리기: ./deskless.sh <묶음> down)"
+    need_tools docker k3d
+}
+
+# 로컬 클러스터 끄기 — 컨테이너만 멈춘다(앱 · 설정 · 데이터는 그대로). 다시 켜기는 up
+cluster_stop() {
+    require_local_cluster stop
+    local cluster="${ENV[KUBE_CONTEXT]#k3d-}"
+    if ! docker info > /dev/null 2>&1; then
+        echo "Docker 엔진이 꺼져 있다 — 로컬 클러스터 $cluster 도 멈춰 있다"
+        return 0
+    fi
+    if ! k3d cluster get "$cluster" > /dev/null 2>&1; then
+        echo "로컬 클러스터 $cluster 가 없다 — 만들기는 ./deskless.sh up"
+        return 0
+    fi
+    step "로컬 클러스터 $cluster 끄기 — 앱 · 설정 · 데이터는 그대로"
+    k3d cluster stop "$cluster"
+    echo "✓ 껐다 — 다시 켜기: ./deskless.sh up(Windows .\\deskless up)"
+}
+
+# 로컬 클러스터 지우기 — 클러스터(노드 · 설치한 앱 · Secret)만 지우고 데이터(Docker 볼륨 LOCAL_DATA_VOLUME)는 남긴다. 다시 만들기는 up
+cluster_delete() {
+    require_local_cluster delete
+    local cluster="${ENV[KUBE_CONTEXT]#k3d-}"
+    ensure_docker
+    if ! k3d cluster get "$cluster" > /dev/null 2>&1; then
+        echo "로컬 클러스터 $cluster 가 없다 — 지울 것 없음"
+        return 0
+    fi
+    step "로컬 클러스터 $cluster 지우기 — 데이터(Docker 볼륨 ${ENV[LOCAL_DATA_VOLUME]:-})는 남는다"
+    k3d cluster delete "$cluster"
+    echo "✓ 지웠다 — 다시 만들기: ./deskless.sh up(Windows .\\deskless up) — .env 의 PC 포트로 새로 만들고 전부 올린다(이미지는 PC 에 있어 다시 넣기만 한다)"
+}
+
+# 다시 만들기 — 먼저 모두 확인(빠진 것이 있으면 지우기 전에 멈춘다) → 지우기 → 원클릭 전부
+cluster_reset() {
+    require_local_cluster reset
+    preflight
+    echo
+    cluster_delete
+    echo
+    all_up
 }
 
 # 전부 설치 · 갱신(원클릭) — 확인 → (로컬이면) Docker · 클러스터 → 인프라 → 백엔드 → 프론트 → 모니터링. 묶음이 늘면 여기와 preflight 에 더한다
@@ -1487,6 +1538,11 @@ main() {
             shift
             load_env
             push_images "$@"
+            return 0
+            ;;
+        stop | delete | reset)
+            load_env
+            "cluster_$bundle"
             return 0
             ;;
         restart)

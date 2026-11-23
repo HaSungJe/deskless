@@ -2,7 +2,7 @@
 #
 #   .\deskless setup   원클릭 설치(처음 한 번) — 필요한 프로그램(winget)과 값 파일. Git Bash 가 없어도 돈다
 #   .\deskless up      원클릭 실행(탐색기에서 deskless.cmd 더블클릭도 같다)
-#   .\deskless <그 밖>  deskless.sh 로 그대로 넘긴다(status · up gateway web · push · restart · infra up · web down …)
+#   .\deskless <그 밖>  deskless.sh 로 그대로 넘긴다(status · stop · delete · reset · up gateway web · push · restart · infra up · web down …)
 #
 # PC · 사용자마다 다른 값(Git Bash 경로 등)은 고정하지 않고 .env 에서 읽는다(.env.example 의 "이 PC" 절).
 # 이 파일은 UTF-8(BOM) — Windows PowerShell 5.1 이 한글을 바르게 읽게. deskless.cmd 는 영문만 둔다(cmd 가 UTF-8 한글을 잘못 읽는다).

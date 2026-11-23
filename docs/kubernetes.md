@@ -141,6 +141,7 @@
 - **스크립트 변수로 `TMP` 를 쓰지 않는다** — Git Bash 가 Windows 프로그램에 넘기는 `TMP` 를 덮으면 k3d · docker 의 임시 폴더가 비어 `C:\` 에 쓰려다 거부된다(임시 폴더 변수는 `WORK_DIR`).
 - **PC · 사용자마다 다른 값은 `.env` 에서**(사용자 결정 2026-11-24) — `GIT_BASH`(deskless.cmd) · `DOCKER_DESKTOP_EXE`(꺼져 있으면 켠다 · 비우면 켜지 않고 멈춘다) · `LOCAL_DATA_VOLUME` · `LOCAL_*_PORT`(게이트웨이 · 웹 · Grafana · Prometheus · 대시보드 · 인프라 4 · API — 로컬 공개 주소는 비워 두면 게이트웨이 · 웹 포트로 정해진다) · `LOCAL_K3S_ARGS`(공백으로 여러 개) · `LOCAL_START_TIMEOUT_SECONDS` · `WAIT_TIMEOUT_MINUTES`(Helm · Job 대기 — 서버도). 원클릭 확인이 포트 형식 · 겹침 · 정수, 로컬에서 직접 적은 `localhost` 공개 주소의 포트가 PC 포트와 같은지를 먼저 본다. 실행 파일에는 이런 값을 적지 않는다 — 다른 PC 도 `.env` 만 고쳐 같은 실행 · 확인을 한다.
 - Windows 에서 막 설치해 PATH 에 아직 없는 `k3d` · `helm`(winget 설치 폴더 — `LOCALAPPDATA` 기준) · `docker`(`DOCKER_DESKTOP_EXE` 옆 `resources/bin`)는 스크립트가 찾아 PATH 에 더한다. 볼륨 자리(`/var/…`)는 Git Bash 가 Windows 경로로 바꾸지 않게 `MSYS_NO_PATHCONV=1` 로 넘긴다.
+- **로컬 클러스터 끄기 · 지우기 · 다시 만들기**(사용자 결정 2026-11-24 — 실행 파일이 맡는다, `k3d` 명령을 따로 치지 않는다) — `stop`(`k3d cluster stop` — 앱 · 설정 · 데이터 그대로, 다시 켜기는 `up` · Docker 가 꺼져 있으면 이미 멈춘 것으로 본다) · `delete`(`k3d cluster delete` — 노드 · 설치한 앱 · Secret 만, 데이터 볼륨 `LOCAL_DATA_VOLUME` 은 남는다 · 다시 만들기는 `up`) · `reset`(먼저 모두 확인 → 지우기 → 원클릭 전부 — PC 포트를 바꾸거나 새 입구가 생겼을 때). `KUBE_CONTEXT=k3d-…` 일 때만 돈다 — 운영 클러스터는 끄거나 지우지 않는다(앱만 내리기는 `<묶음> down`).
 - `./deskless.sh <묶음> <동작>` — 지금 묶음은 `infra`(`up` · `status` · `backup` · `down`) · `backend`(`up` · `status` · `migrate` · `down`) · `web`(`up` · `status` · `down`) · `monitoring`(`up` · `status` · `down`) · `dashboard`(`up` · `status` · `down`). 새 묶음은 같은 스크립트에 하위 명령으로 더한다. 서비스를 고르는 명령 — `up <서비스…>` · `push [서비스…]` · `restart [서비스…]`(아래 "이미지 — GHCR").
 - `backend up` 은 필수 키 · 대수(정수 · 최소 ≤ 최대) · 자동 증설 기준을 먼저 확인하고(틀리면 클러스터에 닿기 전에 멈춘다), 이미지(`build` — 빌드 → 클러스터에 넣기 / `registry` — 받기 Secret) → Secret · ConfigMap → `helm upgrade --install … --wait --timeout <WAIT_TIMEOUT_MINUTES>m`(마이그레이션 hook 포함) 순서로 간다. 대수 키는 앱 이름에서 만든다(`user-service` → `USER_SERVICE_REPLICAS_MIN`).
 - Job 을 기다리는 동작(`infra backup` · `backend migrate`)은 3초마다 성공 · 실패를 보고 최대 `WAIT_TIMEOUT_MINUTES` 분, 실패하면 로그를 보여 주고 멈춘다.
@@ -219,7 +220,7 @@ kubectl --context <컨텍스트> -n deskless exec postgres-0 -- sh -c 'pg_restor
 - 클러스터에 백엔드가 떠 있는 동안 PC 에서 `npm run start:*` 로 백엔드를 같이 띄우지 않는다 — 포트는 따로지만 같은 DB · 큐를 나눠 써서 명령이 어느 쪽 앱으로 갈지 모른다. PC 에서 백엔드를 개발할 때는 `./deskless.sh backend down`.
 - 웹의 로그인 · 가입(서버 쪽 route)은 프론트가 `API_INTERNAL_URL` 을 읽어야 클러스터에서 된다 — `requests/frontend/2026-11-24-api-internal-url.md`.
 - SNS 로그인(카카오 · 네이버)은 각 개발자 콘솔에 클러스터 웹 주소의 콜백(`/api/auth/callback/kakao` · `/naver`)도 등록한다.
-- 지우기 — `./deskless.sh <묶음> down`(데이터 · 백업 · Secret 은 남는다) · `k3d cluster delete <이름>`(데이터 볼륨은 남는다) · `docker volume rm <LOCAL_DATA_VOLUME>`(로컬 데이터 · 백업까지). 옛 compose 데이터 볼륨(`deskless-postgres-data` 등)은 옮기지 않는다 — 필요 없으면 지운다.
+- 지우기 — `./deskless.sh <묶음> down`(데이터 · 백업 · Secret 은 남는다) · `./deskless.sh delete`(로컬 클러스터 — 데이터 볼륨은 남는다) · `docker volume rm <LOCAL_DATA_VOLUME>`(로컬 데이터 · 백업까지). 옛 compose 데이터 볼륨(`deskless-postgres-data` 등)은 옮기지 않는다 — 필요 없으면 지운다.
 
 ## 관리 도구
 

@@ -35,7 +35,7 @@ deskless/
 │   ├── web/     # 프론트 차트 deskless-web — Next.js 서버 · 자동 증설 HPA · 웹 Ingress · 서버 안 게이트웨이 주소(API_INTERNAL_URL)
 │   ├── monitoring/ # 모니터링 차트 deskless-monitoring — Prometheus(앱 파드 자동 찾기 · 기록 규칙) · Grafana(대시보드 2개) · PostgreSQL · Redis 수집기
 │   └── dashboard/  # 쿠버네티스 대시보드 차트 deskless-dashboard — Headlamp 웹 + 로그인 문지기(nginx Basic 인증 — .env 의 DASHBOARD_USER · DASHBOARD_PASSWORD)
-├── deskless.sh  # 실행 명령 하나 — ./deskless.sh up(원클릭: 먼저 모두 확인 → 로컬 클러스터 → 묶음 전부) · up · push · restart <서비스…>(이미지 — 빌드 또는 GHCR) · <묶음> <동작>(infra · backend · web · monitoring — .env · backend/.env · frontend/.env.production → Secret · ConfigMap → Helm, KUBE_CONTEXT 에만)
+├── deskless.sh  # 실행 명령 하나 — ./deskless.sh up(원클릭: 먼저 모두 확인 → 로컬 클러스터 → 묶음 전부) · stop · delete · reset(로컬 클러스터 끄기 · 지우기 · 다시 만들기) · up · push · restart <서비스…>(이미지 — 빌드 또는 GHCR) · <묶음> <동작>(infra · backend · web · monitoring — .env · backend/.env · frontend/.env.production → Secret · ConfigMap → Helm, KUBE_CONTEXT 에만)
 ├── deskless-server.sh # 운영 실행 파일(리눅스 · k3s, Docker 없이) — setup(k3s · helm · nerdctl · 값 파일) · 그 밖은 deskless.sh 를 운영 모드(DESKLESS_TARGET=server · k3s kubeconfig)로
 ├── deskless.cmd # Windows 실행기 — 영문만(cmd 가 UTF-8 한글을 잘못 읽는다) · scripts/deskless-windows.ps1 을 부른다(.\deskless setup · up · 더블클릭 = up, CRLF — .gitattributes)
 ├── scripts/     # deskless-windows.ps1 — 원클릭 설치(winget 프로그램 · 값 파일, Git Bash 없이) · .env 의 GIT_BASH 로 deskless.sh 실행(UTF-8 BOM · CRLF)

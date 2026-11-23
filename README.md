@@ -41,7 +41,7 @@ cd deskless
 .\deskless up
 ```
 
-필요한 것을 먼저 모두 확인한 뒤 → 로컬 클러스터 → 인프라 · 백엔드 · 웹 · 모니터링 · 대시보드를 차례로 올리고, 끝나면 주소를 보여 줍니다. 다시 실행하면 바뀐 것만 갱신합니다(`deskless.cmd` 더블클릭도 같다).
+필요한 것을 먼저 모두 확인한 뒤 → 로컬 클러스터 → 인프라 · 백엔드 · 웹 · 모니터링 · 대시보드를 차례로 올리고, 끝나면 주소를 보여 줍니다. 다시 실행하면 바뀐 것만 갱신합니다(`deskless.cmd` 더블클릭도 같다). 로컬 클러스터 만들기 · 켜기 · 끄기 · 지우기도 이 실행 파일이 맡습니다 — `k3d` 명령을 따로 칠 일이 없습니다.
 
 | 서비스 | 주소 | 비고 |
 |---|---|---|
@@ -52,7 +52,7 @@ cd deskless
 | RabbitMQ 관리 화면 | `http://localhost:<LOCAL_RABBITMQ_ADMIN_PORT>` | 로그인 `RABBITMQ_USER` · `RABBITMQ_PASSWORD` |
 | 쿠버네티스 대시보드 | `http://localhost:<LOCAL_DASHBOARD_PORT>` | 로그인 `DASHBOARD_USER` · `DASHBOARD_PASSWORD` — 파드 · 로그 · 대수(Headlamp 앱으로도 볼 수 있다) |
 
-`<…>` 는 모두 `.env` 에서 정합니다 — 실제 주소는 `.\deskless up` 이 끝날 때 보여 줍니다. PC 입구는 로컬 클러스터를 만들 때 정해지므로, 포트를 바꾸거나 새 입구(예: 대시보드)가 생기면 `up` 이 알려 주는 대로 클러스터를 한 번 지우고 다시 `up` 합니다(데이터는 남습니다).
+`<…>` 는 모두 `.env` 에서 정합니다 — 실제 주소는 `.\deskless up` 이 끝날 때 보여 줍니다. PC 입구는 로컬 클러스터를 만들 때 정해지므로, 포트를 바꾸거나 새 입구(예: 대시보드)가 생기면 `up` 이 알려 주는 대로 `.\deskless reset` 합니다(데이터는 남습니다).
 
 ```powershell
 .\deskless status              # 상태
@@ -60,7 +60,9 @@ cd deskless
 .\deskless web up              # 묶음 하나만 — infra · backend · web · monitoring · dashboard (up · status · down)
 .\deskless infra backup        # 지금 DB 백업
 .\deskless backend migrate     # 마이그레이션만
-k3d cluster delete <이름>      # 로컬 클러스터 지우기 — 이름은 .env 의 KUBE_CONTEXT 에서 k3d- 뒤(데이터는 남는다)
+.\deskless stop                # 로컬 클러스터 끄기 — 앱 · 설정 · 데이터는 그대로, 다시 켜기는 .\deskless up
+.\deskless delete              # 로컬 클러스터 지우기 — 데이터는 남는다, 다시 만들기는 .\deskless up
+.\deskless reset               # 지우고 다시 만들어 전부 올리기 — 포트를 바꾸거나 새 입구가 생겼을 때(데이터는 남는다)
 ```
 
 ## 운영 배포 (GHCR)
