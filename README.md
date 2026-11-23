@@ -33,7 +33,7 @@ cd deskless
 | `backend/.env` | 백엔드 비밀값 · 설정 |
 | `frontend/.env.production`(없으면 `frontend/.env`) | 프론트 값 — `NEXTAUTH_SECRET` 은 setup 이 채운다 |
 
-기본값으로 로컬이 바로 돕니다. 경로 · 포트가 다른 PC 는 `.env` 맨 위 "이 PC" 절만 고칩니다.
+기본값으로 로컬이 바로 돕니다. `.env` 는 기능(PostgreSQL · gateway · web · 모니터링 · 대시보드 …)마다 포트 · 계정 · 설정이 한 절에 모여 있습니다 — 경로가 다른 PC 는 "이 PC" 절, 포트가 겹치면 그 기능 절의 `LOCAL_*_PORT` 를 고칩니다.
 
 ## 실행
 

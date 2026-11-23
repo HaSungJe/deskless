@@ -4,7 +4,7 @@
 #   .\deskless up      원클릭 실행(탐색기에서 deskless.cmd 더블클릭도 같다)
 #   .\deskless <그 밖>  deskless.sh 로 그대로 넘긴다(status · stop · delete · reset · up gateway web · push · restart · infra up · web down …)
 #
-# PC · 사용자마다 다른 값(Git Bash 경로 등)은 고정하지 않고 .env 에서 읽는다(.env.example 의 "이 PC" 절).
+# PC · 사용자마다 다른 값(Git Bash 경로 등)은 고정하지 않고 .env 에서 읽는다(.env.example 의 "이 PC" 절 · 각 기능 절의 LOCAL_*).
 # 이 파일은 UTF-8(BOM) — Windows PowerShell 5.1 이 한글을 바르게 읽게. deskless.cmd 는 영문만 둔다(cmd 가 UTF-8 한글을 잘못 읽는다).
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -101,7 +101,7 @@ function Invoke-Setup {
     if (-not $ok) { Stop-Deskless '준비하지 못한 것이 있다 — 위 메시지를 보고 다시 .\deskless setup' }
     Write-Host '✓ 준비 끝 — 다음' -ForegroundColor Green
     Write-Host '  1. Docker Desktop 을 처음 깐 PC 는 한 번 켜서 약관에 동의한다 — WSL 설치 · 다시 시작을 하라고 하면 따른다'
-    Write-Host '  2. .env 맨 위 "이 PC" 절이 이 PC 와 맞는지 본다 — Git Bash · Docker Desktop 경로 · PC 포트'
+    Write-Host '  2. .env 의 "이 PC" 절(Git Bash · Docker Desktop 경로)과 각 기능 절의 LOCAL_*_PORT(PC 포트)가 이 PC 와 맞는지 본다'
     Write-Host '  3. .\deskless up'
     exit 0
 }

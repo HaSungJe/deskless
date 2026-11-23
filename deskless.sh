@@ -42,7 +42,7 @@ ENV_FILE="${DESKLESS_ENV_FILE:-$ROOT/.env}"
 BACKEND_ENV_FILE="${DESKLESS_BACKEND_ENV_FILE:-$ROOT/backend/.env}"
 NAMESPACE=deskless
 # PC · 사용자마다 다를 수 있는 값(경로 · PC 포트 · 볼륨 이름 · k3s 인자 · 기다리는 시간)은 여기 고정하지 않고 .env 에서 읽는다
-# — 다른 PC 도 .env 만 고쳐 같은 실행 · 확인을 한다(사용자 결정 2026-11-24, .env.example 의 "이 PC" 절)
+# — 다른 PC 도 .env 만 고쳐 같은 실행 · 확인을 한다(사용자 결정 2026-11-24, .env.example 의 "이 PC" 절 · 각 기능 절의 LOCAL_*)
 LOCAL_PORT_KEYS=(LOCAL_GATEWAY_PORT LOCAL_WEB_PORT LOCAL_POSTGRES_PORT LOCAL_RABBITMQ_PORT LOCAL_RABBITMQ_ADMIN_PORT LOCAL_REDIS_PORT LOCAL_GRAFANA_PORT LOCAL_PROMETHEUS_PORT LOCAL_DASHBOARD_PORT LOCAL_API_PORT)
 INFRA_RELEASE=deskless-infra
 INFRA_SECRET=deskless-infra
@@ -1180,7 +1180,7 @@ public_url() {
         return 0
     fi
     is_local || die ".env 에 $key 가 필요합니다 — 운영은 공개 도메인(예: https://api.<도메인> · https://<도메인>)"
-    [ -n "${ENV[$port_key]:-}" ] || die ".env 에 $port_key 가 필요합니다(.env.example 의 \"이 PC\" 절)"
+    [ -n "${ENV[$port_key]:-}" ] || die ".env 에 $port_key 가 필요합니다(.env.example 참고)"
     printf 'http://localhost:%s' "${ENV[$port_key]}"
 }
 
