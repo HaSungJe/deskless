@@ -12,7 +12,10 @@ dataDir: /var/lib/deskless
 timeZone: Asia/Seoul
 
 postgres:
-    image: postgres:17.12-alpine
+    # pgvector 가 든 PostgreSQL(공식 postgres:17.12 Debian 이미지 + pgvector 0.8.7 — 진입점 · 환경 변수 · 경로가 같다)
+    # 백엔드 AI 업체 검색 벡터(t_store_embedding)의 마이그레이션이 CREATE EXTENSION vector 를 한다(backend docs/architecture.md "실행 · 배포")
+    # 옛 postgres:17.12-alpine 데이터는 그대로 읽는다 — 정렬 규칙(libc)이 달라 처음 한 번 ./deskless.sh infra up 이 색인을 다시 만든다(docs/kubernetes.md)
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
     # 요청값만(자리 잡기용) — 한도는 두지 않는다(옛 compose 와 같다, 운영에서 메모리 부족으로 죽지 않게)
     resources:
         requests: {cpu: 100m, memory: 256Mi}

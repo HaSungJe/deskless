@@ -61,9 +61,9 @@ BACKEND_SECRET=deskless-backend
 BACKEND_CONFIG=deskless-backend-env
 # 백엔드 앱(이미지 이름) — .env 대수 키의 앞부분과 짝(gateway → GATEWAY_REPLICAS_MIN …)
 BACKEND_APPS=(gateway user-service admin-service scheduler)
-# 백엔드 비밀값(backend/.env) — 필수 · 비어도 되는 것(비면 그 기능만 꺼진다 — AWS 없이 돌리기 · 토스 없으면 결제만 503). 어느 앱이 무엇을 받는지는 차트 values.yaml 의 secretKeys
+# 백엔드 비밀값(backend/.env) — 필수 · 비어도 되는 것(비면 그 기능만 꺼진다 — AWS 없이 돌리기 · 토스 없으면 결제만 503 · Gemini 없으면 AI 대화만 503). 어느 앱이 무엇을 받는지는 차트 values.yaml 의 secretKeys
 BACKEND_SECRET_REQUIRED=(JWT_SECRET TOKEN_CIPHER_KEY INTERNAL_API_TOKEN BCRYPT_CODE "${BROKER_APP_KEYS[@]}")
-BACKEND_SECRET_OPTIONAL=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TOSS_SECRET_KEY)
+BACKEND_SECRET_OPTIONAL=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TOSS_SECRET_KEY GEMINI_API_KEY)
 # backend/.env 에 있어도 넘기지 않는 키 — 클러스터가 정한다(DB · Redis · 브로커 주소는 인프라 Service 또는 .env 의 관리형 값, 포트 · 바인딩 · 서비스 주소 · 인스턴스 ID(비우면 파드 이름) · 파일 폴더 · 지표 · 시간대는 차트), 브로커 관리자 계정은 앱이 쓰지 않는다
 BACKEND_CLUSTER_KEYS=(DATABASE_URL REDIS_URL RABBITMQ_HOST RABBITMQ_PORT RABBITMQ_USER RABBITMQ_PASSWORD GATEWAY_PORT USER_SERVICE_PORT ADMIN_SERVICE_PORT USER_SERVICE_HOST ADMIN_SERVICE_HOST USER_SERVICE_URL ADMIN_SERVICE_URL GATEWAY_PUBLIC_URL CORS_ORIGINS USER_WEB_URL GATEWAY_INSTANCE_ID FILE_STORAGE_DIR METRICS_HOST GATEWAY_METRICS_PORT USER_SERVICE_METRICS_PORT ADMIN_SERVICE_METRICS_PORT SCHEDULER_METRICS_PORT TZ)
 # 그 밖의 backend/.env 키는 모두 설정(ConfigMap)으로 넘긴다 — 백엔드 키 목록을 여기 다시 적지 않는다
@@ -572,6 +572,17 @@ wait_job() {
 
 # ── infra ───────────────────────────────────
 
+# PostgreSQL 정렬 규칙이 바뀐 데이터면 색인을 한 번 다시 만든다 — 옛 alpine 이미지(musl)로 만든 DB 를 Debian 이미지(glibc)가 읽을 때.
+# musl 로 만든 DB 는 정렬 규칙 버전이 비어 있다(datcollversion NULL) → glibc 에서 실제 버전이 있으면 글자 색인 순서가 달라졌을 수 있다
+# → REINDEX + 버전 기록(REFRESH COLLATION VERSION). 기록한 뒤에는 다시 하지 않는다(처음부터 Debian 으로 만든 DB 도 건너뛴다)
+postgres_collation_refresh() {
+    local need
+    need="$(kube -n "$NAMESPACE" exec postgres-0 -c postgres -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT datcollversion IS NULL AND pg_database_collation_actual_version(oid) IS NOT NULL FROM pg_database WHERE datname = current_database()"' 2> /dev/null | tr -d '[:space:]' || true)"
+    [ "$need" = t ] || return 0
+    step "PostgreSQL 정렬 규칙이 바뀐 데이터(옛 alpine 이미지) — 색인을 한 번 다시 만든다(데이터는 그대로)"
+    kube -n "$NAMESPACE" exec postgres-0 -c postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "REINDEX DATABASE \"$POSTGRES_DB\"" -c "ALTER DATABASE \"$POSTGRES_DB\" REFRESH COLLATION VERSION"'
+}
+
 # 인프라 설치 · 갱신
 infra_up() {
     require KUBE_CONTEXT "${INFRA_SECRET_KEYS[@]}"
@@ -608,6 +619,7 @@ infra_up() {
     apply_env_object secret "$INFRA_SECRET" "$secret_file"
     step "Helm $INFRA_RELEASE — 준비될 때까지 기다린다(최대 $(wait_minutes)분, RabbitMQ 계정 작업 포함)"
     helm_ctx upgrade --install "$INFRA_RELEASE" "$ROOT/charts/infra" -n "$NAMESPACE" -f "$values_file" --wait --timeout "$(wait_minutes)m"
+    postgres_collation_refresh
     echo "✓ 인프라 설치 — 상태: ./deskless.sh infra status"
     if [ "$expose" = true ]; then
         echo "  PC 에서: $(infra_addresses)"

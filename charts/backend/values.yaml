@@ -66,7 +66,7 @@ apps:
         hostEnv: USER_SERVICE_HOST
         metricsPortEnv: USER_SERVICE_METRICS_PORT
         files: true
-        secretKeys: [DATABASE_URL, REDIS_URL, JWT_SECRET, TOKEN_CIPHER_KEY, INTERNAL_API_TOKEN, BCRYPT_CODE, RABBITMQ_USER_SERVICE_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY]
+        secretKeys: [DATABASE_URL, REDIS_URL, JWT_SECRET, TOKEN_CIPHER_KEY, INTERNAL_API_TOKEN, BCRYPT_CODE, RABBITMQ_USER_SERVICE_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY, GEMINI_API_KEY]
     admin-service:
         replicasMin: 1
         replicasMax: 1
@@ -89,7 +89,7 @@ apps:
         hostEnv: ''
         metricsPortEnv: SCHEDULER_METRICS_PORT
         files: false
-        secretKeys: [DATABASE_URL, REDIS_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY]
+        secretKeys: [DATABASE_URL, REDIS_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TOSS_SECRET_KEY, GEMINI_API_KEY]
 
 # 네트워크 격리 — NETWORK_POLICY(.env). true 면 templates/networkpolicy.yaml 의 들어오는 쪽 허용 규칙(+ 인프라 차트의 네임스페이스 기본 차단)
 networkPolicy:

@@ -143,7 +143,7 @@ affected_data: ["Secret deskless-infra", "Helm 릴리스 deskless-infra", "노�
 ## 결정한 것
 
 - [x] 파드 1개씩 직접 만든 차트 — 공개 차트 · 오퍼레이터는 쓰지 않는다. 근거: 자동 증설이 목적이고 그 밖은 Docker 처럼 단순하게(사용자 2026-11-23).
-- [x] 이미지는 옛 compose 가 쓰던 버전으로 고정 — `postgres:17.12-alpine` · `rabbitmq:4.4.0-management-alpine` · `redis:8.10.3-alpine`. 근거: 지금 백엔드가 쓰던 버전 그대로.
+- [x] 이미지는 옛 compose 가 쓰던 버전으로 고정 — `postgres:17.12-alpine` · `rabbitmq:4.4.0-management-alpine` · `redis:8.10.3-alpine`. 근거: 지금 백엔드가 쓰던 버전 그대로. — PostgreSQL 은 2026-11-25 `pgvector/pgvector:0.8.7-pg17-bookworm` 로 교체(백엔드 AI 검색 벡터 — `CREATE EXTENSION vector`, 옛 alpine 데이터는 `infra up` 이 한 번 REINDEX)
 - [x] 데이터는 노드 고정 폴더(hostPath) — 로컬은 Docker 볼륨 `deskless-infra-data` 를 그 자리에 붙여 클러스터를 다시 만들어도 남는다.
 - [x] 백업은 하루 1번 · 7일 · `.env` 로 조절 · 같은 서버 안. 근거: 내부 복구용(사용자 2026-11-23).
 - [x] 비밀번호는 첫 설치 때만 적용(compose 와 같다), 리소스는 요청값만(한도 없음), 운영 접속은 `kubectl port-forward`, 옛 compose 데이터는 옮기지 않는다.

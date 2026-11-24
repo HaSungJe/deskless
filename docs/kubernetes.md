@@ -29,7 +29,7 @@
 | `templates/migrate.yaml` | 마이그레이션 — 설치 · 업그레이드마다 앱보다 먼저 도는 hook Job(pre-install · pre-upgrade, 실패하면 설치가 멈춘다) + 손으로 돌리는 틀(멈춰 둔 CronJob — `backend migrate`) |
 | `templates/ingress.yaml` | `GATEWAY_HOST` 가 있을 때 게이트웨이 Ingress(클래스 · TLS 는 `.env`) |
 
-- **앱별 비밀값** — 옛 compose 는 `.env` 를 통째로 넘기고 다른 앱의 비밀값만 빈 값으로 덮었다. 차트는 반대로 그 앱이 쓰는 키만 넘긴다: gateway(DB · Redis · JWT · 내부 토큰 · 자기 브로커 계정) · user-service(+ 토큰 암호화 · 비밀번호 해시 · AWS · 토스) · admin-service(+ 토큰 암호화 · 비밀번호 해시 · AWS) · scheduler(DB · Redis · AWS · 토스).
+- **앱별 비밀값** — 옛 compose 는 `.env` 를 통째로 넘기고 다른 앱의 비밀값만 빈 값으로 덮었다. 차트는 반대로 그 앱이 쓰는 키만 넘긴다: gateway(DB · Redis · JWT · 내부 토큰 · 자기 브로커 계정) · user-service(+ 토큰 암호화 · 비밀번호 해시 · AWS · 토스 · Gemini) · admin-service(+ 토큰 암호화 · 비밀번호 해시 · AWS) · scheduler(DB · Redis · AWS · 토스 · Gemini).
 - **설정 · 비밀값 흐름** — 백엔드 앱 값은 deskless 가 받아 둔 사본의 **`backend/.env`**(`backend/.env.example` 복사 — 로컬은 그대로)에서 읽는다 — deskless `.env` 에 다시 적지 않는다(사용자 결정 2026-11-23). 백엔드 작업 폴더(개발용 `npm run start:*`)의 `.env` 와는 따로다 — 백엔드는 독립 프로젝트, 쿠버네티스는 deskless 몫이라 클러스터용 값 파일을 deskless 가 갖는다(사용자 결정 2026-11-24). 브로커 앱 계정 비밀번호(`RABBITMQ_*_PASSWORD`)는 PC 의 npm 백엔드도 같은 클러스터 브로커에 붙으므로 두 파일이 같아야 한다(기본값은 같다). `deskless.sh` 가 Secret `deskless-backend`(정해 둔 비밀값 키 + `DATABASE_URL` · `REDIS_URL`)와 ConfigMap `deskless-backend-env`(`backend/.env` 의 나머지 키 전부 + `RABBITMQ_HOST` · `RABBITMQ_PORT`)를 만든다.
   - 공개 주소 `GATEWAY_PUBLIC_URL` · `CORS_ORIGINS` · `USER_WEB_URL` 은 deskless `.env` 의 `GATEWAY_PUBLIC_URL` · `WEB_PUBLIC_URL` — 로컬은 비워 두면 `http://localhost:<LOCAL_GATEWAY_PORT · LOCAL_WEB_PORT>`(기본 13000 · 15000), 운영은 도메인(필수). 로컬에서 `localhost` 주소를 직접 적으면 그 포트가 PC 포트와 같아야 한다(원클릭 확인). `backend/.env` 의 같은 키(PC 실행용 3000 · 5000)는 쓰지 않는다.
   - `DATABASE_URL` · `REDIS_URL` · `RABBITMQ_HOST` 는 클러스터 안 주소 — 인프라 계정으로 만들고(비밀번호는 퍼센트 인코딩), 관리형 서비스면 deskless `.env` 의 값. `backend/.env` 의 같은 키(PC 용 `localhost`)는 쓰지 않는다.
@@ -37,7 +37,7 @@
   - 비밀값 같은 이름(`PASSWORD` · `SECRET` · `TOKEN` · `_KEY` · `_CODE`)인데 모르는 키가 `backend/.env` 에 있으면 설정으로 넘기지 않고 멈춘다 — 백엔드가 비밀값을 더하면 `BACKEND_SECRET_*` 와 차트 `secretKeys` 에 넣는다.
 - **설정이 바뀌면 다시 뜬다** — 두 파일의 해시(`configHash`)를 파드 주석에 넣어, 값이 바뀐 `backend up` 에서만 파드가 새로 뜬다.
 - **이미지** — 태그 = `backend/`(deskless 에 받아 둔 커밋) 커밋 12자리. `.env` 의 `IMAGE_SOURCE` 로 고른다 — `build`(기본): 이 컴퓨터에서 `APP` 인자 4개로 빌드(이미 있으면 건너뜀) → 로컬은 `k3d image import`, 운영 서버는 nerdctl 로 k3s containerd 에 바로(`imagePullPolicy: IfNotPresent`) / `registry`: GHCR 에서 받는다(`Always` · 받기 Secret — 아래 "이미지 — GHCR"). 새 이미지는 한 대씩 바꾼다(RollingUpdate `maxSurge 1` · `maxUnavailable 0` — 새 파드가 준비되면 옛 파드를 하나 내려 늘 정한 대수 이상이 떠 있다).
-- **게이트웨이 공개** — 로컬은 `GATEWAY_EXPOSE=1` → Service LoadBalancer 3000(k3d 가 PC `127.0.0.1:13000`), 프록시가 없어 `backend/.env` 의 `TRUST_PROXY` 는 비운다(운영 Ingress 1단이면 1). 운영은 `GATEWAY_HOST` → Ingress. k3s 기본 Traefik 은 본문 한도 · 응답 버퍼링이 기본으로 없고 WebSocket 을 그대로 넘겨 앱이 기대하는 값(10MB · SSE · `/ws/`)을 따로 설정하지 않는다 — 다른 Ingress(nginx 등)는 그 설정이 필요하다.
+- **게이트웨이 공개** — 로컬은 `GATEWAY_EXPOSE=1` → Service LoadBalancer 3000(k3d 가 PC `127.0.0.1:13000`), 프록시가 없어 `backend/.env` 의 `TRUST_PROXY` 는 비운다(운영 Ingress 1단이면 1). 운영은 `GATEWAY_HOST` → Ingress. k3s 기본 Traefik 은 본문 한도 · 응답 버퍼링이 기본으로 없고 WebSocket 을 그대로 넘겨 앱이 기대하는 값(10MB · SSE · AI 대화 스트림 `POST /api/v1/user-service/chat/message` · `/ws/`)을 따로 설정하지 않는다 — 다른 Ingress(nginx 등)는 그 설정이 필요하다.
 - **공용 파일 볼륨** — gateway · user-service · admin-service 가 노드 폴더 `<dataDir>/files` 를 `/app/storage/files` 로 같이 본다(노드 1대 전제 — 여러 대면 S3 모드). 노드 폴더는 root 소유로 생겨 initContainer 가 `node` 소유로 맞춘다.
 
 ### 프론트 차트 `charts/web/`(릴리스 `deskless-web`)
@@ -61,7 +61,8 @@
 ### 인프라 (PostgreSQL · RabbitMQ · Redis)
 
 - 클러스터 안에 **파드 1개씩**, 이 저장소에서 직접 만든 차트로(사용자 결정 2026-11-23). 공개 차트(Bitnami — 2025년부터 무료 이미지 업데이트 중단) · 오퍼레이터(CloudNativePG 등 — 이 규모에 과함)는 쓰지 않는다.
-- 이미지 · 설정은 옛 compose 와 같다 — 원본 backend `3125886` 의 `compose.postgres.yml` · `compose.rabbitmq.yml` · `compose.redis.yml`(PostgreSQL 17 · RabbitMQ 4 management · Redis 8 AOF + 비밀번호). RabbitMQ 앱 계정 3개 · 권한은 `docker/rabbitmq/init.sh` 와 **같은 내용**(백엔드 `npm run broker:check` 가 대조한다).
+- 이미지 · 설정은 옛 compose 와 같다 — 원본 backend `3125886` 의 `compose.postgres.yml` · `compose.rabbitmq.yml` · `compose.redis.yml`(PostgreSQL 17 · RabbitMQ 4 management · Redis 8 AOF + 비밀번호). PostgreSQL 만 pgvector 가 든 이미지로 바꿨다(2026-11-25 — 백엔드 AI 업체 검색 벡터 `t_store_embedding` 의 마이그레이션이 `CREATE EXTENSION vector` 를 한다, 공식 postgres 이미지와 진입점 · 환경 변수 · 경로가 같다).
+- **옛 alpine 데이터 이어 쓰기** — 같은 PostgreSQL 17 이라 데이터 폴더를 그대로 읽는다(폴더 소유자는 진입점이 새 이미지의 postgres 사용자로 맞춘다). 다만 글자 정렬 규칙이 musl → glibc 로 바뀌어 글자 색인 순서가 어긋날 수 있어, `infra up` 이 DB 의 정렬 규칙 버전이 비어 있고(musl 로 만든 DB) 지금 버전이 있으면 한 번 `REINDEX DATABASE` + `REFRESH COLLATION VERSION` 을 한다(기록한 뒤에는 건너뛴다 — 처음부터 새 이미지로 만든 DB 도 건너뛴다). 관리형(RDS)은 해당 없음 — pgvector 는 RDS 의 지원 확장이다. RabbitMQ 앱 계정 3개 · 권한은 `docker/rabbitmq/init.sh` 와 **같은 내용**(백엔드 `npm run broker:check` 가 대조한다).
 - 관리형 서비스(RDS · Amazon MQ · ElastiCache)를 쓰는 운영에서는 인프라를 설치하지 않는다 — 앱은 `.env` 의 주소로 붙는다.
 - 계정 · 비밀번호는 처음 설치 때만 적용된다(compose 와 같다) — 운영은 첫 설치 전에 정한다. 리소스는 요청값만 작게, 한도는 두지 않는다(compose 에 한도가 없었다).
 - 밖으로 여는 포트는 로컬뿐 — 로컬은 PC `127.0.0.1` 의 5432 · 5672 · 15672 · 6379(백엔드 `.env.example` 의 `localhost` 주소 그대로), 운영은 열지 않고 필요할 때 `kubectl port-forward`.
@@ -70,7 +71,7 @@
 
 | 파일 | 만드는 것 |
 |---|---|
-| `values.yaml` | 기본값 — 이미지(패치 버전까지 고정: `postgres:17.12-alpine` · `rabbitmq:4.4.0-management-alpine` · `redis:8.10.3-alpine`), `expose`(false) · `dataDir`(`/var/lib/deskless`) · 백업 주기 · 보관 일수 · 리소스 요청값 |
+| `values.yaml` | 기본값 — 이미지(패치 버전까지 고정: `pgvector/pgvector:0.8.7-pg17-bookworm`(PostgreSQL 17.12 + pgvector) · `rabbitmq:4.4.0-management-alpine` · `redis:8.10.3-alpine`), `expose`(false) · `dataDir`(`/var/lib/deskless`) · 백업 주기 · 보관 일수 · 리소스 요청값 |
 | `templates/postgres.yaml` · `rabbitmq.yaml` · `redis.yaml` | 서비스마다 StatefulSet(파드 1) + Service(`postgres:5432` · `rabbitmq:5672 · 15672` · `redis:6379`) — `expose` 면 LoadBalancer(k3s servicelb), 아니면 ClusterIP. 데이터는 노드 고정 폴더 `<dataDir>/<서비스>`(hostPath, 노드 1대 전제), 프로브는 옛 compose healthcheck 와 같은 명령 |
 | `templates/rabbitmq.yaml` 의 `rabbitmq-headless` | 파드 이름 `rabbitmq-0` 고정(노드 이름 `rabbit@rabbitmq-0` — 데이터를 다시 읽게) + 지표 포트 15692(밖으로 열지 않는다) |
 | `templates/rabbitmq-init.yaml` · `files/rabbitmq-init.sh` | 앱 계정 3개 · 권한 — Helm hook(post-install · post-upgrade) Job, 스크립트는 옛 `init.sh` 그대로(머리 주석 한 줄만 다르다) |
