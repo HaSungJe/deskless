@@ -17,6 +17,7 @@ deskless 가 하위 저장소(backend · frontend)에 보내는 수정 요청. �
 | 2026-11-24 | frontend | [공개 값(NEXT_PUBLIC_*)을 실행 때 읽기 · 이미지 하나로 모든 환경](frontend/2026-11-24-runtime-public-env.md) | 반영 `33c722a` — `getPublicEnv` · 루트 layout 허용 목록 · `Dockerfile` `ARG DESKLESS_BUILD_ENV_HASH`. 웹 이미지 하나로 모든 환경 |
 | 2026-11-24 | backend | [`.env.example` 을 앱 · 기능 단위로 묶고 주석 줄이기](backend/2026-11-24-env-example-layout.md) | 반영 `b7a10b5` — 결과 요약: backend `changes/README.md`(절 13개 · 키 뜻은 `docs/architecture.md` "설정" 표 · 키 · 값 그대로 — deskless 영향 없음) |
 | 2026-11-24 | frontend | [`.env.example` 을 기능 단위로 묶고 주석 줄이기](frontend/2026-11-24-env-example-layout.md) | 반영 `6239666` — 줄인 설명은 frontend `docs/architecture.md` "환경 값 메모", 키는 `API_INTERNAL_URL` 만 더해짐 |
+| 2026-11-25 | backend | [편의시설 DTO 선언 순서 — 실행하면 바로 죽음](backend/2026-11-25-dto-declaration-order.md) | 보냄 — 반영 전에는 `c0534f1` 의 gateway · user-service · admin-service 가 뜨지 않는다(scheduler · 마이그레이션은 됨) |
 
 ## 2026-11-23 묶음 — 반영 순서
 
