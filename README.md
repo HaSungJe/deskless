@@ -67,6 +67,18 @@ cd deskless
 .\deskless reset               # 지우고 다시 만들어 전부 올리기 — 포트를 바꾸거나 새 입구가 생겼을 때(데이터는 남는다)
 ```
 
+## 하위 저장소 최신 받기
+
+backend · frontend 는 각 저장소에서 개발하고, 여기서는 받기만 합니다. 각 저장소가 푸시하면:
+
+```powershell
+git submodule update --remote    # 1. 최신 받기 — 하나만이면 뒤에 backend 또는 frontend
+.\deskless up web                # 2. 클러스터에 반영 — 바뀐 서비스만(프론트 web, 백엔드 gateway · user-service · admin-service · scheduler, 앱 4개 모두는 backend)
+git add backend frontend         # 3. 받은 커밋을 deskless 에 기록한 뒤 커밋 · 푸시 — 운영 서버는 이 커밋으로 같은 이미지 태그를 찾는다
+```
+
+백엔드에 마이그레이션이 들어 있으면 `user-service` 를 꼭 같이 고릅니다 — 마이그레이션은 user-service 이미지로 앱보다 먼저 돕니다(예: `.\deskless up user-service admin-service`).
+
 ## 운영 배포 (GHCR)
 
 이미지는 GHCR(GitHub 컨테이너 저장소)로 주고받습니다 — 보통 PC 에서 올리고 운영 서버에서 받지만 반대로도 됩니다. `.env` 의 `IMAGE_REGISTRY` · `GHCR_USER` · `GHCR_PUSH_TOKEN`(올리기) · `GHCR_PULL_TOKEN`(받기)을 씁니다 — 비어 있어도 로컬 실행에는 영향이 없습니다.
@@ -100,11 +112,6 @@ git pull --recurse-submodules
 
 ## 더 보기
 
-- 하위 저장소(backend · frontend)는 받기만 합니다 — 안에서 고치지 않고, 고칠 것은 [requests/](requests/README.md) 요청서로 보냅니다. 각 저장소가 푸시하면 최신을 받아 deskless 에 커밋합니다:
-
-  ```powershell
-  git submodule update --remote               # backend · frontend 최신 받기(하나만: git submodule update --remote frontend)
-  git add backend frontend                    # 받은 커밋을 deskless 에 기록 → 커밋 · 푸시
-  ```
+- 하위 저장소에 고칠 것 — [requests/](requests/README.md) 요청서로 보냅니다(`backend/` · `frontend/` 안에서는 고치지 않는다).
 - 운영 서버 · 이미지(GHCR) · 백업 · 비밀번호 바꾸기 · 값 흐름 · 자동 증설 · 네트워크 격리 · 모니터링 · 대시보드 — [docs/kubernetes.md](docs/kubernetes.md)
 - 저장소 규칙 — [AGENTS.md](AGENTS.md) · 진행 순서 — [로드맵](.beaver/output/roadmap/k8s-roadmap.md)
