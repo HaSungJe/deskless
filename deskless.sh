@@ -574,13 +574,14 @@ wait_job() {
 
 # PostgreSQL 정렬 규칙이 바뀐 데이터면 색인을 한 번 다시 만든다 — 옛 alpine 이미지(musl)로 만든 DB 를 Debian 이미지(glibc)가 읽을 때.
 # musl 로 만든 DB 는 정렬 규칙 버전이 비어 있다(datcollversion NULL) → glibc 에서 실제 버전이 있으면 글자 색인 순서가 달라졌을 수 있다
-# → REINDEX + 버전 기록(REFRESH COLLATION VERSION). 기록한 뒤에는 다시 하지 않는다(처음부터 Debian 으로 만든 DB 도 건너뛴다)
+# → REINDEX + 지금 버전 기록(pg_database.datcollversion — ALTER DATABASE … REFRESH COLLATION VERSION 은 빈 값에서 바꾸지 못해 관리자 계정으로 직접 적는다).
+#   기록한 뒤에는 다시 하지 않는다(처음부터 Debian 으로 만든 DB 도 건너뛴다)
 postgres_collation_refresh() {
     local need
     need="$(kube -n "$NAMESPACE" exec postgres-0 -c postgres -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT datcollversion IS NULL AND pg_database_collation_actual_version(oid) IS NOT NULL FROM pg_database WHERE datname = current_database()"' 2> /dev/null | tr -d '[:space:]' || true)"
     [ "$need" = t ] || return 0
     step "PostgreSQL 정렬 규칙이 바뀐 데이터(옛 alpine 이미지) — 색인을 한 번 다시 만든다(데이터는 그대로)"
-    kube -n "$NAMESPACE" exec postgres-0 -c postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "REINDEX DATABASE \"$POSTGRES_DB\"" -c "ALTER DATABASE \"$POSTGRES_DB\" REFRESH COLLATION VERSION"'
+    kube -n "$NAMESPACE" exec postgres-0 -c postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "REINDEX DATABASE \"$POSTGRES_DB\"" -c "UPDATE pg_database SET datcollversion = pg_database_collation_actual_version(oid) WHERE datname = current_database()"'
 }
 
 # 인프라 설치 · 갱신
